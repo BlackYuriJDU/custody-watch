@@ -62,6 +62,7 @@ consulta a banco de identidades. Reconhecimento facial continua fora de escopo.
 
 - [x] Ampliar câmera/zoom para inspecionar caixas pequenas do mosaico (#79).
 - [x] Inspecionar ID local, bbox, projeção diagnóstica e evidência de contato (#89).
+- [x] Priorizar vídeo no mosaico, alternar foco e reorganizar a inspeção (#104).
 - Apresentar comparação com gabarito apenas quando disponível e rotulado.
 - Reduzir sobreposição e corte dos rótulos da planta em cenas densas.
 - Refinar hierarquia visual e navegação conforme os fluxos de acompanhamento.
@@ -72,7 +73,16 @@ associação; a planta só mostra essas projeções mediante opção diagnóstic
 O contrato de evidência e a anotação no inspetor estão implementados;
 validação de confiança e comparação com gabarito na interface continuam pendentes.
 
-O botão **Ampliar** pausa o replay e congela o quadro exibido, com câmera,
+O modo **Mosaico** conserva a ordem do cadastro e mostra as câmeras em duas
+colunas no desktop, com uma coluna em tela estreita. **Foco** traz a câmera
+selecionada para a primeira posição e amplia seu card; as outras permanecem
+disponíveis abaixo. Selecionar na planta ou no card atualiza o destaque. A
+seleção fica restrita ao andar atual e o layout é temporário nesta página.
+As imagens ocupam uma área 16:9 sem recorte do conteúdo; formatos diferentes
+podem deixar margens. O mapa permanece auxiliar, com diagnóstico opcional.
+
+O botão **Ampliar**, ou o clique/Enter na imagem, pausa o replay e congela
+o quadro exibido, com câmera,
 segmento, índice, tempo da imagem/mídia e idade ao abrir. O modal identifica
 oracle/sintético/detector e imagem histórica; não lista tracks de outros quadros
 como se estivessem presentes nessa imagem. Zoom de 100% a 400% é relativo ao
@@ -80,6 +90,12 @@ ajuste à largura, com rolagem; **Ajustar à largura** retorna ao início da ima
 Esc ou **Fechar inspeção** encerra e devolve foco ao botão da câmera. O replay
 permanece pausado. Sem imagem, o botão fica desabilitado; uma falha ao carregar
 é explícita e não substitui silenciosamente o quadro.
+
+No desktop, imagem e formulário têm rolagens independentes dentro do inspetor;
+em tela estreita, o formulário fica abaixo da imagem e o diálogo rola. Dados
+de segmento e lacunas de cadastro ficam em **Dados da câmera**. Origem dos
+tracks, estado, tempo/idade da imagem e incerteza do relógio continuam no card.
+**Pausado/Reproduzindo** descreve o replay de gravações, nunca uma câmera ao vivo.
 
 A inspeção pede `/api/image` com `resolution=source`: conserva a resolução do
 arquivo local e codifica JPEG com qualidade 95; a prévia continua limitada a

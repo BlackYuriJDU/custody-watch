@@ -2,10 +2,10 @@
 
 (() => {
   const $ = id => document.getElementById(id);
-  const colors = ["#6bd5c2", "#b4a2ff", "#efbd80", "#82bcf5"];
+  const colors = ["#83c8b4", "#8bb9e0", "#e9b478", "#c5aed9"];
   const labels = {not_started: "Não iniciada", observed: "Quadro disponível", missing: "Quadro ausente", stale: "Sem quadro recente", completed: "Gravação concluída", unavailable: "Sem observações"};
   const seconds = value => `${Number(value).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})} s`;
-  let config, state, selected = null, cursor = 0, generation = 0, controller, timer;
+  let config, state, selected = null, layout = "mosaic", cursor = 0, generation = 0, controller, timer;
   let inspectionScale = 1, inspectionGeneration = 0, inspectionReturnId;
   let contactReviewer, queueReviewer;
   const make = (tag, text, className) => {
@@ -62,11 +62,12 @@
       if (camera.coverage_m) map.append(svg("polygon", {points: camera.coverage_m.map(p => `${x(p[0])},${y(p[1])}`).join(" "), fill: color, "fill-opacity": .055, stroke: color, "stroke-opacity": opacity * .6, "stroke-dasharray": "5 4", "stroke-width": 1}));
       if (camera.position_m) {
         const px = x(camera.position_m[0]), py = y(camera.position_m[1]);
-        const group = svg("g", {role: "button", tabindex: 0, "aria-label": `Selecionar ${camera.camera_id} na planta`, opacity});
+        const mapId = `select-map-camera-${config.cameras.indexOf(camera)}`;
+        const group = svg("g", {id: mapId, role: "button", tabindex: 0, "aria-label": `Selecionar ${camera.camera_id} na planta`, opacity});
         group.append(svg("rect", {x: px - 10, y: py - 8, width: 20, height: 16, rx: 4, fill: "#162531", stroke: color, "stroke-width": 1.5}));
         group.append(svg("path", {d: `M ${px + 10} ${py - 4} l 7 -3 v 14 l -7 -3 Z`, fill: color}));
         group.append(svg("text", {x: px, y: py + 25, fill: color, "font-size": 10, "text-anchor": "middle"}, camera.camera_id));
-        const choose = () => { selected = camera.camera_id; render(); };
+        const choose = () => { selected = camera.camera_id; render(); document.getElementById(mapId)?.focus(); };
         group.addEventListener("click", choose);
         group.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(); } });
         map.append(group);
@@ -97,10 +98,10 @@
     const card = make("article", undefined, `camera-card accent-${index % 4}${selected === camera.camera_id ? " selected" : ""}`);
     card.setAttribute("aria-label", `Câmera ${camera.camera_id}`);
     const head = make("div", undefined, "card-head"), choose = make("button", undefined, "camera-select");
-    choose.type = "button"; choose.setAttribute("aria-label", `Selecionar ${camera.camera_id}`);
+    choose.type = "button"; choose.id = `select-camera-${index}`; choose.setAttribute("aria-label", `Selecionar ${camera.camera_id}`);
     choose.setAttribute("aria-pressed", String(selected === camera.camera_id));
     choose.append(make("span", undefined, "camera-symbol"), make("span", camera.camera_id));
-    choose.addEventListener("click", () => { selected = camera.camera_id; render(); });
+    choose.addEventListener("click", () => { selected = camera.camera_id; render(); document.getElementById(choose.id)?.focus(); });
     const status = make("span", labels[snapshot.status], `status ${snapshot.status}`);
     const inspect = make("button", "Ampliar", "secondary inspect-camera");
     inspect.type = "button"; inspect.id = `inspect-camera-${index}`;
@@ -108,7 +109,10 @@
     inspect.disabled = !snapshot.image;
     inspect.addEventListener("click", () => openInspection(camera, snapshot, inspect.id));
     head.append(choose, inspect, status);
-    const holder = make("div", undefined, "camera-image"), placeholder = make("span", "Sem imagem neste instante", "placeholder");
+    const holder = make("button", undefined, "camera-image"), placeholder = make("span", "Sem imagem neste instante", "placeholder");
+    holder.type = "button"; holder.disabled = !snapshot.image;
+    holder.setAttribute("aria-label", `Inspecionar quadro de ${camera.camera_id}`);
+    holder.addEventListener("click", () => openInspection(camera,snapshot,inspect.id));
     holder.append(placeholder);
     if (snapshot.image) {
       const descriptor = snapshot.image, image = new Image();
@@ -129,31 +133,38 @@
     }
     const foot = make("div", undefined, "card-foot"), description = make("div"), clocks = make("div", undefined, "clock-details");
     const origin = camera.mode === "oracle" ? "ORACLE / GABARITO" : camera.provenance === "synthetic" ? "SINTÉTICO" : "PREDIÇÕES DO DETECTOR";
-    description.append(make("p", camera.media_kind === "schematic" ? "Esquema sintético · sem vídeo" : camera.media_kind === "video" ? "Vídeo gravado" : "Vídeo indisponível", "origin"));
-    description.append(make("p", `${origin} · ${camera.segment_id}`));
+    description.append(make("p", origin, "origin"));
+    description.append(make("p", camera.media_kind === "schematic" ? "Esquema sintético · sem vídeo" : camera.media_kind === "video" ? "Vídeo gravado · IDs locais" : "Vídeo indisponível"));
     const missing = [];
     if (!camera.position_m) missing.push("posição desconhecida");
     if (!camera.projection_frame_id) missing.push("sem calibração comum");
     if (!camera.coverage_m) missing.push("cobertura desconhecida");
-    if (missing.length) description.append(make("p", missing.join(" · ")));
-    clocks.append(make("p", snapshot.image ? `Imagem ${seconds(snapshot.image.t)} · idade ${seconds(snapshot.image.age_s)}` : "Imagem ausente"));
-    clocks.append(make("p", camera.clock.uncertainty_s === null ? "Sincronização: precisão desconhecida" : `Incerteza do relógio ±${seconds(camera.clock.uncertainty_s)}`));
+    clocks.append(make("p", snapshot.image ? `Quadro ${snapshot.image.frame_index} · ${seconds(snapshot.image.t)}` : "Imagem ausente"));
+    clocks.append(make("p", snapshot.image ? `Idade ${seconds(snapshot.image.age_s)}` : "Sem quadro para inspecionar"));
+    clocks.append(make("p",camera.clock.uncertainty_s === null ? "Sincronização: precisão desconhecida" : `Incerteza do relógio ±${seconds(camera.clock.uncertainty_s)}`));
     foot.append(description, clocks); card.append(head, holder, foot);
+    const details = make("details",undefined,"camera-details");
+    details.append(make("summary","Dados da câmera"),make("p",`Segmento ${camera.segment_id}`));
+    if (missing.length) details.append(make("p",missing.join(" · ")));
+    card.append(details);
     return card;
   }
 
   function render() {
     if (!state) return;
-    const floor = $("floor").value, cameras = config.cameras.filter(c => c.floor_id === floor);
+    const wall = cameraWallLayout(config.cameras,$("floor").value,selected,layout), cameras = wall.cameras;
+    selected = wall.selected;
     $("camera-count").textContent = `${cameras.length} câmeras`;
-    $("selected-label").textContent = selected ? `${selected} em destaque` : "IDs locais por câmera";
+    $("selected-label").textContent = selected ? `${selected} selecionada` : "Nenhuma câmera neste andar";
+    $("cameras").classList.toggle("focus-view",layout === "focus");
+    for (const mode of ["mosaic","focus"]) $("layout-"+mode).setAttribute("aria-pressed",String(layout === mode));
     $("cameras").replaceChildren(...cameras.map(camera => renderCard(camera, state.cameras.find(c => c.camera_id === camera.camera_id))));
     $("clock").textContent = seconds(state.t); renderMap();
   }
 
   function stop() {
     if (timer) clearInterval(timer);
-    timer = undefined; $("play").textContent = "Reproduzir";
+    timer = undefined; $("play").textContent = "Reproduzir"; $("playback-state").textContent = "Pausado";
   }
   function zoomInspection(delta) {
     inspectionScale = inspectionZoom(inspectionScale, delta);
@@ -248,6 +259,7 @@
     if (cursor >= config.timeline.end_s) cursor = config.timeline.start_s;
     const origin = cursor, began = performance.now(), speed = Number($("speed").value);
     $("play").textContent = "Pausar";
+    $("playback-state").textContent = "Reproduzindo";
     timer = setInterval(() => {
       const t = origin + (performance.now() - began) / 1000 * speed;
       void seek(t);
@@ -275,6 +287,7 @@
       $("reset").addEventListener("click", () => { stop(); void seek(config.timeline.start_s); });
       $("speed").addEventListener("change", () => { if (timer) { stop(); start(); } });
       $("floor").addEventListener("change", () => { selected = config.cameras.find(c => c.floor_id === $("floor").value)?.camera_id || null; render(); });
+      for (const mode of ["mosaic","focus"]) $("layout-"+mode).addEventListener("click",() => { layout = mode; render(); });
       $("history").addEventListener("change", renderMap);
       $("diagnostics").addEventListener("change", renderMap);
       $("inspection-close").addEventListener("click", () => $("inspector").close());
