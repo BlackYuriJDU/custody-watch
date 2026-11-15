@@ -527,6 +527,7 @@ function desenhaRecovery(recovery, segmento) {
   const motivos = {
     cleanup_unconfirmed: "liberação da captura anterior não confirmada",
     permanent_source_error: "erro permanente da fonte", journal_failed: "falha no histórico",
+    archive_failed: "falha no arquivo de bagagens",
     processing_failed: "falha ao iniciar ou executar o detector",
     source_stale: "lacuna na recepção", read_failed: "leitura interrompida",
     capture_exception: "erro de captura", user_stop: "parada solicitada",
@@ -588,6 +589,14 @@ function desenhaJournal(journal) {
   if (journal.retained_events !== undefined) {
     texto += " Em memória: " + journal.retained_events +
              " de " + journal.total_events + " eventos.";
+  }
+  const bags = journal.bag_retention;
+  if (bags?.enabled) {
+    texto += " Bagagens em memória: " + bags.resident_bags +
+             "; terminais com gravação confirmada: " + bags.archived_bags + ".";
+    if (bags.state === "failed") {
+      texto += " Falha no arquivo de bagagens; processamento bloqueado nesta sessão.";
+    }
   }
   alvo.append(el("span", "", texto));
 }

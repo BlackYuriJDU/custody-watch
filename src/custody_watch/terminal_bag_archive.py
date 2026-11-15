@@ -14,6 +14,10 @@ from uuid import uuid4
 from .types import TERMINAL_BAG_STATES, Bag, BagState, Point
 
 
+class TerminalArchiveUnavailable(OSError):
+    """Falha de inicialização, comunicável sem expor caminho/erro bruto."""
+
+
 class TerminalBagArchive:
     """Arquivo opt-in; confirma bagagem e aliases antes de liberar os objetos.
 

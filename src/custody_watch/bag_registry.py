@@ -10,6 +10,10 @@ Regra P3: quando a reassociação é incerta, marcar AMBIGUA e calar.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TypeVar
+
 from .config import RegistryConfig
 from .events import Event, EventKind, EventLog
 from .terminal_bag_archive import TerminalBagArchive
@@ -19,6 +23,18 @@ DEFAULT_REGISTRY = RegistryConfig()
 
 MOVED_THRESHOLD_M = DEFAULT_REGISTRY.moved_threshold_m
 AMBIGUITY_RADIUS_M = DEFAULT_REGISTRY.ambiguity_radius_m
+
+_T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class BagRetentionStatus:
+    enabled: bool
+    state: str
+    resident_bags: int
+    resident_links: int
+    archived_bags: int
+    archived_links: int
 
 
 class BagRegistry:
@@ -33,14 +49,41 @@ class BagRegistry:
         self._unresolved: dict[int, Bag] = {}
         self._config = config
         self._archive = terminal_archive
+        self._archive_failed = False
+        self._archived_bags = 0
+        self._archived_links = 0
         if self._archive is not None:
             self._archive.claim()
+
+    def _archive_call(self, operation: Callable[..., _T], *args) -> _T:
+        try:
+            return operation(*args)
+        except Exception:
+            self._archive_failed = True
+            raise
+
+    @property
+    def archive_failed(self) -> bool:
+        return self._archive_failed
+
+    def retention_status(self) -> BagRetentionStatus:
+        """Contagens confirmadas nesta sessão; sem leitura de disco/histórico."""
+        enabled = self._archive is not None
+        state = "failed" if self._archive_failed else "ready" if enabled else "disabled"
+        return BagRetentionStatus(
+            enabled,
+            state,
+            len(self._bags),
+            len(self._by_track),
+            self._archived_bags,
+            self._archived_links,
+        )
 
     def get(self, bag_id: int) -> Bag | None:
         bag = self._bags.get(bag_id)
         if bag is not None or self._archive is None:
             return bag
-        return self._archive.get(bag_id)
+        return self._archive_call(self._archive.get, bag_id)
 
     def get_by_track(self, track_id: int) -> Bag | None:
         """Bagagem que responde por este track.
@@ -52,18 +95,26 @@ class BagRegistry:
         """
         bag_id = self._by_track.get(track_id)
         if bag_id is None:
-            bag_id = track_id if self._archive is None else self._archive.canonical(track_id)
+            bag_id = (
+                track_id
+                if self._archive is None
+                else self._archive_call(self._archive.canonical, track_id)
+            )
         return self.get(bag_id)
 
     def link_track(self, track_id: int, bag_id: int) -> None:
         """Faz um track novo responder por uma bagagem já registrada."""
         if self._archive is not None:
-            previous = self._archive.get(self._archive.canonical(track_id))
+            previous = self._archive_call(
+                self._archive.get, self._archive_call(self._archive.canonical, track_id)
+            )
             if previous is not None and previous.bag_id != bag_id:
                 raise ValueError("ID terminal não pode trocar de bagagem")
         if bag_id not in self._bags:
-            if self._archive is not None and self._archive.get(bag_id) is not None:
-                self._archive.link(track_id, bag_id)
+            if self._archive is not None and self.get(bag_id) is not None:
+                previous_links = self._archive_call(self._archive.links, {track_id})
+                self._archive_call(self._archive.link, track_id, bag_id)
+                self._archived_links += int(not previous_links)
                 return
             raise KeyError(f"bagagem {bag_id} não registrada")
         self._by_track[track_id] = bag_id
@@ -73,7 +124,7 @@ class BagRegistry:
         religação. Espelha `TrackLinker.links()`: enquanto não há religação o
         track responde por si mesmo e não precisa aparecer aqui.
         """
-        links = {} if self._archive is None else self._archive.links(track_ids)
+        links = {} if self._archive is None else self._archive_call(self._archive.links, track_ids)
         links.update(
             {
                 track: bag
@@ -101,7 +152,7 @@ class BagRegistry:
         ]
 
     def all(self) -> list[Bag]:
-        history = [] if self._archive is None else self._archive.all()
+        history = [] if self._archive is None else self._archive_call(self._archive.all)
         return [*self.resident(), *history]
 
     def resident(self) -> list[Bag]:
@@ -109,14 +160,16 @@ class BagRegistry:
         return list(self._bags.values())
 
     def archived_counts(self) -> dict[str, int]:
-        return {"bags": 0, "bag_links": 0} if self._archive is None else self._archive.counts()
+        return (
+            {"bags": 0, "bag_links": 0}
+            if self._archive is None
+            else self._archive_call(self._archive.counts)
+        )
 
     def is_archived(self, bag_id: int) -> bool:
         """Um snapshot histórico é somente leitura, inclusive ao reaparecer."""
         return (
-            self._archive is not None
-            and bag_id not in self._bags
-            and self._archive.get(bag_id) is not None
+            self._archive is not None and bag_id not in self._bags and self.get(bag_id) is not None
         )
 
     def _archive_terminal(self, bag: Bag) -> None:
@@ -125,7 +178,9 @@ class BagRegistry:
         aliases = {
             track: target for track, target in self._by_track.items() if target == bag.bag_id
         }
-        self._archive.persist(bag, aliases)
+        self._archive_call(self._archive.persist, bag, aliases)
+        self._archived_bags += 1
+        self._archived_links += len(aliases)
         # A transação já foi confirmada. Em erro, todas as referências ficam em RAM.
         self._bags.pop(bag.bag_id)
         for track in aliases:
@@ -229,11 +284,7 @@ class BagRegistry:
         `t` é o instante do frame; o default existe só para não quebrar
         chamadas antigas. Quando `events` é `None`, nada é emitido.
         """
-        if (
-            bag_id not in self._bags
-            and self._archive is not None
-            and self._archive.get(bag_id) is not None
-        ):
+        if bag_id not in self._bags and self._archive is not None and self.get(bag_id) is not None:
             raise ValueError("custódia arquivada não pode receber outro dono")
         self._bags[bag_id].owner_party = party_id
 
