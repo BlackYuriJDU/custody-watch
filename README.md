@@ -409,6 +409,58 @@ This reduces that scan's scope without establishing a total state bound.
 Registry retention, incomplete re-ID, inactive histories, flags and groups still
 require separate lifecycle policies. #30 remains partially addressed.
 
+#### Opt-in terminal bag archive
+
+The CPU harness can move terminal bag objects and their aliases to a new local
+SQLite file, while keeping active and ambiguous custody in RAM:
+
+```powershell
+.venv\Scripts\python.exe scripts/soak_session.py --output outputs/archive-new --frames 8000 --seed 7 --archive-terminal-bags
+```
+
+`terminal-bags.sqlite` is created exclusively in the new output directory.
+`BagRegistry` and `LiveSession` also accept a `terminal_archive=TerminalBagArchive(path)`
+keyword; the path must be new and its parent must exist. Each archive belongs
+to one registry/association segment. Existing files are never reopened as new
+custody, and a different file/version/namespace fails instead of borrowing IDs.
+The archive is not yet wired into `serve.py` or automatic reconnection; that
+requires a separate segment lifecycle integration. The default stays in RAM.
+
+Only terminal snapshots are persisted, with aliases in the same transaction.
+Objects leave RAM after commit succeeds; write failure propagates and retains
+the affected objects and aliases. A missing/unreadable file is an error, never
+an unknown bag. Old IDs/aliases cannot be redirected to a new custody.
+The journal remains the full event history and is not replaced by SQLite.
+
+`get`, `get_by_track`, `links` and `all` retain access to archived records.
+Archived bags are **detached historical snapshots**: terminal state, owner,
+anchor and timestamps are frozen at archival, and modifying a returned copy
+does not update the archive. Observing that ID again cannot emit `BAG_APPEARED`
+or reopen ownership. A genuinely new ID at that location remains a new question.
+`all()` and unfiltered historical links can materialize history; use `resident()`
+or point lookups in instrumentation/hot paths. Explicit historical enumeration
+is not a bounded-memory API.
+
+The harness reports resident objects in `counts` and disk rows separately in
+`archived_terminal`. It opens/closes SQLite connections per operation, requesting
+a 256 KiB page-cache target; this is not a bound on total process/OS memory or disk use.
+Disk history grows, and no disk purge policy is implied. Remaining histories,
+groups, aliases of active bags and ambiguous custody can still exceed diagnostic
+budgets: the option does not make the whole #30 soak pass or define a production SLA.
+
+Paired synthetic result: [terminal retention, 2026-11-15](validation/terminal-retention-final-2026-11-15.json).
+One run per mode, same revision/configuration/seed 7 and 8000 input frames:
+80 resident bags without the archive versus 17 resident and 63 archived with it;
+17 nonterminal bags (including 15 ambiguous) and all 318 event payloads matched.
+Both modes still returned `budget_exceeded` for other retained state. In this
+single measurement, total instrumented time was 0.43302380001114216 s versus
+3.807727099992917 s and RSS was 55873536 versus 56983552 bytes: fewer resident
+bag objects did **not** establish lower process memory or a performance gain.
+The result identifies the clean code revision, source/output hashes and limits.
+Reproduce the command above with and without `--archive-terminal-bags`, using
+different new output directories; compare journal records with `kind=event`
+by `payload`, excluding per-run segment/session IDs and wall-clock metadata.
+
 `tracemalloc` measures allocations traced after its start, not every native
 allocation or VRAM. On Windows, process memory uses
 [GetProcessMemoryInfo](https://learn.microsoft.com/en-us/windows/win32/psapi/process-memory-usage-information)

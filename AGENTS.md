@@ -34,6 +34,8 @@ $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
   Hooks são obrigatórios, com suíte completa no commit; nunca use `--no-verify`.
 - Preserve P1–P4: posse só por vínculo forte; bagagem parada como âncora espacial;
   incerteza suprime alertas; flags descrevem relações, nunca atributos pessoais.
+- Retenção: confirme persistência antes de liberar RAM; preserve tombstones/aliases
+  por segmento e reporte residentes e arquivo em disco separadamente.
 - Preserve fontes, dados e resultados. Toda métrica cita o arquivo de resultado
   e informa modo, split, seed (ou ausência) e quantidade de runs; não invente números.
   Nos recortes oracle atuais, IDs e caixas vêm do gabarito: não demonstram detector,

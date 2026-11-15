@@ -15,11 +15,11 @@ from .types import TERMINAL_BAG_STATES, BagState
 # Cada chave retornada por counts declara sua retenção. Contadores lifetime
 # não são entradas retidas e ficam fora do orçamento de coleções.
 RETENTION = {
-    "bags": "sessão inteira; preservar posse ativa, terminal e referências de flags (#30)",
-    "bag_links": "sessão inteira; aliases apontam para bag_id, não podem ressuscitar terminal",
+    "bags": "objetos residentes; arquivo terminal opt-in preserva ativas/ambíguas (#30)",
+    "bag_links": "aliases residentes; aliases terminais acompanham o arquivo opt-in",
     "unresolved_index": "índice não terminal; terminal sai na próxima consulta; registro permanece",
     "active_bags": "bags não-terminais, incluindo ambíguas; não expirar custódia cegamente",
-    "terminal_bags": "subconjunto de bags; tombstones impedem readoção de custódia resolvida",
+    "terminal_bags": "terminais residentes; arquivo opt-in conserva tombstones/posse em disco",
     "ambiguous_bags": "subconjunto de bags; incerteza suprime sinais",
     "occlusion_candidates": "por bag; pessoas observadas durante oclusão, usadas na resolução",
     "linker_windows": "sessão inteira; max_gap limita match, não remove a janela",
@@ -169,7 +169,7 @@ class SessionProbe:
     def counts(self):
         with self.session._trava:
             s = self.session._s
-            bags = s.registry.all()
+            bags = s.registry.resident()
             return {
                 "bags": len(bags),
                 "bag_links": len(s.registry._by_track),

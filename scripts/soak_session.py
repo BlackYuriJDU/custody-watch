@@ -30,6 +30,7 @@ from custody_watch.orchestrator import LiveSession
 from custody_watch.painel import Painel, estado
 from custody_watch.resource_probe import memory_snapshot
 from custody_watch.session_probe import RETENTION, SessionProbe, synthetic_frames
+from custody_watch.terminal_bag_archive import TerminalBagArchive
 
 
 def positive(text):
@@ -72,6 +73,11 @@ def main():
     parser.add_argument("--max-rss-mib", type=positive, help="orçamento opt-in deste host")
     parser.add_argument("--max-feed-ms", type=positive, help="teto opt-in do máximo feed observado")
     parser.add_argument("--profile-memory", action="store_true")
+    parser.add_argument(
+        "--archive-terminal-bags",
+        action="store_true",
+        help="arquiva snapshots terminais em SQLite novo; não limita custódias ativas",
+    )
     args = parser.parse_args()
     if args.output.exists():
         parser.error("output já existe; resultados anteriores são preservados")
@@ -106,6 +112,11 @@ def main():
         "cycle_frames": 100,
         "config": asdict(config),
         "retention": RETENTION,
+        "terminal_archive": {
+            "enabled": args.archive_terminal_bags,
+            "file": "terminal-bags.sqlite" if args.archive_terminal_bags else None,
+            "scope": "snapshots terminais/aliases em disco; não é limite total de RAM ou disco",
+        },
         "budgets": budgets,
         "resource_budgets": {"rss_mib": args.max_rss_mib, "feed_max_ms": args.max_feed_ms},
         "budget_scope": "limiares diagnósticos para cena com até três tracks por frame; não SLA",
@@ -120,11 +131,17 @@ def main():
     if args.profile_memory:
         tracemalloc.start()
     started = time.perf_counter()
+    archive = (
+        TerminalBagArchive(args.output / "terminal-bags.sqlite")
+        if args.archive_terminal_bags
+        else None
+    )
     writer = JournalWriter(args.output / "journal")
     session = LiveSession(
         GroundPlane(np.diag([0.01, 0.01, 1.0])),
         config,
         events=EventLog(max_events=args.event_tail, sink=writer.emit),
+        terminal_archive=archive,
     )
     panel = Painel()
     image = np.zeros((24, 32, 3), np.uint8)
@@ -180,6 +197,7 @@ def main():
                         "simulated_s": frame.t,
                         "wall_s": time.perf_counter() - started,
                         "counts": counts,
+                        "archived_terminal": session._s.registry.archived_counts(),
                         "memory": memory,
                         "timings": timing,
                         "frames": {
@@ -261,6 +279,7 @@ def main():
         "simulated_s": last["simulated_s"],
         "frames": last["frames"],
         "last_snapshot": last,
+        "archived_terminal": session._s.registry.archived_counts(),
         "exceeded": sorted(exceeded),
         "journal_records": journal_records,
         "faults": faults,
@@ -287,7 +306,7 @@ def main():
             "tracemalloc cobre alocações rastreadas após start, não todo heap nativo/VRAM",
             "RSS/working set inclui heap nativo e pode incluir páginas compartilhadas",
             "timings incluem instrumentação; sem meta universal de FPS",
-            "nenhuma política de retenção foi alterada; crescimento remete à #30",
+            "arquivo opt-in afeta só terminais; demais coleções ainda remetem à #30",
         ],
     }
     (args.output / "summary.json").write_text(
