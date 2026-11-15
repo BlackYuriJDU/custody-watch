@@ -240,6 +240,31 @@ def test_reaparecimento_terminal_preserva_eventos_e_fila_da_sessao(tmp_path, sta
     assert archived._s.registry.resident() == []
 
 
+def test_terminal_orfa_reaparece_sem_tentar_atribuir_posse_posterior(tmp_path):
+    plane = GroundPlane(np.diag([0.01, 0.01, 1.0]))
+    session = LiveSession(
+        plane, Config(), terminal_archive=TerminalBagArchive(tmp_path / "terminal.sqlite")
+    )
+    old = session._s.registry.observe(Observation(1, "suitcase", Point(0.2, 2), 0))
+    old.state = BagState.RETIRADA_ESTRANHO
+    session._s.registry.link_track(11, 1)
+    session.feed(1, [])
+    session.feed(
+        2,
+        [
+            TrackedDetection(100, "person", (0, 0, 100, 200)),
+            TrackedDetection(11, "suitcase", (0, 120, 40, 200)),
+        ],
+    )
+    assert session.bag_for_track(11).owner_party is None
+    assert session.bag_for_track(11).state is BagState.RETIRADA_ESTRANHO
+    assert not session.events.of_kind(EventKind.BAG_OWNED)
+    groups = len(session._s.parties._parties)
+    with pytest.raises(ValueError, match="arquivada"):
+        session.aponta_dono(1, 50, 100)
+    assert len(session._s.parties._parties) == groups
+
+
 def test_sessao_preserva_eventos_fila_posse_e_historico_sem_varrer_arquivo(tmp_path, monkeypatch):
     plane = GroundPlane(np.diag([0.01, 0.01, 1.0]))
     baseline = LiveSession(plane, Config())

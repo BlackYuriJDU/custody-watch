@@ -111,6 +111,14 @@ class BagRegistry:
     def archived_counts(self) -> dict[str, int]:
         return {"bags": 0, "bag_links": 0} if self._archive is None else self._archive.counts()
 
+    def is_archived(self, bag_id: int) -> bool:
+        """Um snapshot histórico é somente leitura, inclusive ao reaparecer."""
+        return (
+            self._archive is not None
+            and bag_id not in self._bags
+            and self._archive.get(bag_id) is not None
+        )
+
     def _archive_terminal(self, bag: Bag) -> None:
         if self._archive is None:
             return

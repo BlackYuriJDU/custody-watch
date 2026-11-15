@@ -739,6 +739,9 @@ class _Session:
             conhecida = self.identify(observation, people)
             if conhecida is None:
                 continue
+            if self.registry.is_archived(conhecida.bag_id):
+                seen.add(conhecida.bag_id)
+                continue
 
             # A bagagem andou. Resolver ANTES de observe(), que moveria a
             # âncora junto com quem a está levando. Quando `carry_away` devolve
@@ -1038,6 +1041,8 @@ class LiveSession:
             bag = s.registry.get(bag_id)
             if bag is None:
                 raise ValueError(f"bagagem {bag_id} não existe")
+            if s.registry.is_archived(bag_id):
+                raise ValueError("custódia arquivada é somente leitura")
 
             dono = _quem_esta_em(self._ultimo_tracked, px, py)
             if dono is None:
