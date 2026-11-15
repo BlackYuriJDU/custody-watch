@@ -8,6 +8,7 @@
   <script src="/assets/replay_link.js" defer></script>
   <script src="/assets/map_positions.js" defer></script>
   <script src="/assets/camera_inspector.js" defer></script>
+  <script src="/assets/camera_wall.js" defer></script>
   <script src="/assets/contact_review.js" defer></script>
   <script src="/assets/review_queue.js" defer></script>
   <script src="/assets/contact_review_ui.js" defer></script>
@@ -16,65 +17,75 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/">custody<span>watch</span><i aria-hidden="true"></i></a>
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">cw</span>custody<span>watch</span></a>
     <span class="lab-tag">LABORATÓRIO</span>
-    <span class="top-note">Replay de gravações · sem câmeras ao vivo</span>
+    <span class="top-note"><i aria-hidden="true"></i> Gravações locais <span>· sem câmeras ao vivo</span></span>
   </header>
   <main>
     <section class="heading">
-      <div><p class="eyebrow">ACOMPANHAMENTO MULTICÂMERA</p><h1>Visão do ambiente</h1>
+      <div><p class="eyebrow">OBSERVAÇÃO / REPLAY</p><h1>Central de câmeras<span class="heading-dot">.</span></h1>
         <p class="subtitle" id="site">Carregando ambiente…</p></div>
       <div class="heading-controls"><label for="floor">Andar</label><select id="floor" aria-label="Andar"></select>
         <span class="count" id="camera-count"></span></div>
     </section>
     <p id="error" class="error" role="alert" hidden></p>
-    <div class="workspace" id="workspace" aria-busy="true">
-      <section class="panel map-panel" aria-label="Planta do ambiente">
-        <div class="panel-heading"><div><h2>Planta e observações</h2><p id="coordinate-label"></p></div>
-          <span class="small-tag">METROS</span></div>
-        <div class="map-wrap"><svg id="map" viewBox="0 0 640 420" role="img" aria-label="Câmeras e observações locais na planta"></svg></div>
-        <div class="map-options"><label><input id="history" type="checkbox" checked> Últimas observações</label>
-          <span class="legend"><b class="dot"></b> Diagnóstico atual <b class="ghost-dot"></b> Histórico</span></div>
-        <div class="map-options"><label><input id="diagnostics" type="checkbox"> Projeções diagnósticas (chão não verificado)</label></div>
-        <p class="map-note" id="position-summary" aria-live="polite"></p>
-        <p class="map-note">As observações atuais não comprovam contato com o chão. Projeções diagnósticas são hipóteses, sem elegibilidade para associação. Cobertura declarada não garante visibilidade.</p>
-      </section>
-      <section class="mosaic-panel" aria-label="Mosaico de câmeras">
-        <div class="mosaic-heading"><h2>Câmeras do andar</h2><span id="selected-label">Selecione uma câmera</span></div>
-        <div id="cameras" class="cameras"></div>
-      </section>
-    </div>
     <section class="transport panel" aria-label="Controles do replay">
-      <div class="transport-top"><div class="transport-label"><span class="replay-dot"></span><strong>Replay sincronizado</strong><span id="loading" aria-live="polite"></span></div>
+      <div class="transport-top"><div class="transport-label"><span class="replay-dot"></span><strong>Replay sincronizado</strong><span id="playback-state">Pausado</span><span id="loading" aria-live="polite"></span></div>
         <span class="time-caption">TEMPO DO EXPERIMENTO <output id="clock">0,00 s</output></span></div>
       <input id="timeline" type="range" min="0" max="1" step="0.05" value="0" aria-label="Tempo do replay">
-      <div class="transport-bottom"><div class="play-controls"><button id="reset" class="secondary" type="button">↤ <span>Voltar ao início</span></button>
-        <button id="play" class="primary" type="button">Reproduzir</button>
+      <div class="transport-bottom"><div class="play-controls"><button id="play" class="primary" type="button">Reproduzir</button>
+        <button id="reset" class="secondary" type="button">↤ <span>Voltar ao início</span></button>
         <label class="speed-label" for="speed">Velocidade <select id="speed"><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div>
         <span class="time-extent" id="extent"></span></div>
     </section>
+    <div class="workspace" id="workspace" aria-busy="true">
+      <section class="mosaic-panel" aria-label="Mosaico de câmeras">
+        <div class="mosaic-heading"><div><p class="eyebrow">01 / CÂMERAS</p><h2>Câmeras do andar</h2></div>
+          <div class="wall-controls"><span id="selected-label">Selecione uma câmera</span>
+            <div class="layout-switch" role="group" aria-label="Layout das câmeras">
+              <button id="layout-mosaic" type="button" aria-pressed="true">Mosaico</button>
+              <button id="layout-focus" type="button" aria-pressed="false">Foco</button>
+            </div></div></div>
+        <div id="cameras" class="cameras"></div>
+        <p class="wall-note">Selecione uma câmera para destacá-la. Clique na imagem para inspecionar um quadro congelado.</p>
+      </section>
+      <section class="panel map-panel" aria-label="Planta do ambiente">
+        <div class="panel-heading"><div><p class="eyebrow">02 / ESPAÇO</p><h2>Planta do ambiente</h2></div>
+          <span class="small-tag">METROS</span></div>
+        <div class="map-wrap"><svg id="map" viewBox="0 0 640 420" role="img" aria-label="Câmeras e observações locais na planta"></svg></div>
+        <div class="map-options"><label><input id="history" type="checkbox" checked> Últimas observações</label></div>
+        <div class="map-options"><label><input id="diagnostics" type="checkbox"> Projeções diagnósticas (chão não verificado)</label></div>
+        <div class="legend"><span><b class="dot"></b> Diagnóstico</span><span><b class="ghost-dot"></b> Histórico</span></div>
+        <p class="map-note" id="position-summary" aria-live="polite"></p>
+        <div class="map-caveat"><strong>Posições não qualificadas</strong><p>Projeções não comprovam contato com o chão e não permitem associação. Cobertura declarada não garante visibilidade.</p></div>
+        <details class="map-reference"><summary>Referencial do ambiente</summary><p id="coordinate-label"></p></details>
+      </section>
+    </div>
+    <div class="review-workbench">
     <section class="panel review-queue" aria-label="Fila de revisão">
-      <h2>Fila de revisão</h2>
-      <label for="queue-file">Carregar fila JSON local</label><input id="queue-file" type="file" accept=".json,application/json">
+      <div class="section-title"><div><p class="eyebrow">03 / REVISÃO</p><h2>Fila de revisão</h2></div><span class="small-tag">LOCAL</span></div>
+      <div class="queue-upload"><label for="queue-file">Carregar fila JSON local</label><input id="queue-file" type="file" accept=".json,application/json"></div>
       <p id="queue-policy" class="contact-note"></p><output id="queue-position">Nenhuma fila carregada.</output>
       <div class="queue-controls"><button id="queue-prev" class="secondary" type="button" aria-label="Quadro anterior da fila" disabled>← Anterior</button>
         <button id="queue-open" class="secondary" type="button" disabled>Abrir quadro da fila</button>
         <button id="queue-next" class="secondary" type="button" aria-label="Próximo quadro da fila" disabled>Próximo →</button>
         <button id="queue-clear" class="secondary" type="button" disabled>Remover fila</button></div>
       <output id="queue-progress"></output><p id="queue-message" class="contact-feedback" role="status"></p>
-      <p class="contact-note">Leitura apenas neste navegador, sem upload. Até 1 MiB, 1000 quadros e 1000 pares quadro/ID. Trocar de quadro descarta campos não guardados. Recarregar perde fila e rascunho; exporte as anotações.</p>
+      <p class="contact-note">Sem upload. Trocar de quadro descarta campos não guardados. Recarregar perde fila e rascunho; exporte as anotações.</p>
+      <details class="queue-limits"><summary>Limites do arquivo</summary><p class="contact-note">Até 1 MiB, 1000 quadros e 1000 pares quadro/ID. Nenhuma revisão humana é criada pelo carregamento.</p></details>
     </section>
     <section class="panel contact-export-bar" aria-label="Rascunho de evidências">
-      <div><strong id="contact-count">0 anotações guardadas nesta página</strong>
+      <div><p class="eyebrow">RASCUNHO TEMPORÁRIO</p><strong id="contact-count">0 anotações guardadas nesta página</strong>
         <p>Rascunho temporário. Exporte antes de recarregar ou fechar a página.</p></div>
       <button id="contact-export" class="secondary" type="button" disabled>Exportar evidências</button>
       <p id="contact-global-message" role="status"></p>
     </section>
+    </div>
     <dialog id="inspector" aria-labelledby="inspection-title">
-      <div class="inspection-heading"><div><h2 id="inspection-title">Inspeção de câmera</h2><p id="inspection-origin"></p></div>
+      <div class="inspection-heading"><div><p class="eyebrow">INSPEÇÃO / QUADRO CONGELADO</p><h2 id="inspection-title">Inspeção de câmera</h2><p id="inspection-origin"></p></div>
         <button id="inspection-close" class="secondary" type="button">Fechar inspeção</button></div>
-      <p id="inspection-clock"></p>
-      <p class="inspection-warning">Quadro congelado · replay pausado. IDs locais; posição no chão não qualificada.</p>
+      <div class="inspection-context"><p id="inspection-clock"></p>
+        <p class="inspection-warning">Replay pausado · IDs locais · posição não qualificada</p></div>
       <section id="queue-navigation-modal" class="queue-modal" aria-label="Navegação da fila" hidden>
         <output id="queue-position-modal"></output>
         <div class="queue-controls"><button id="queue-prev-modal" class="secondary" type="button" aria-label="Quadro anterior na inspeção" disabled>← Anterior</button>
@@ -82,14 +93,17 @@
           <button id="queue-next-modal" class="secondary" type="button" aria-label="Próximo quadro na inspeção" disabled>Próximo →</button></div>
         <output id="queue-progress-modal"></output><p id="queue-message-modal" class="contact-feedback" role="status"></p>
       </section>
-      <div class="inspection-controls"><button id="inspection-out" class="secondary" type="button" aria-label="Reduzir zoom">−</button>
+      <div class="inspection-review-layout">
+        <div class="inspection-stage">
+        <div class="inspection-controls"><span class="control-caption">IMAGEM</span><button id="inspection-out" class="secondary" type="button" aria-label="Reduzir zoom">−</button>
         <output id="inspection-zoom" aria-live="polite">100%</output>
         <button id="inspection-in" class="secondary" type="button" aria-label="Ampliar zoom">+</button>
         <button id="inspection-fit" class="secondary" type="button">Ajustar à largura</button>
         <span id="inspection-resolution"></span></div>
-      <div class="inspection-review-layout">
         <div id="inspection-viewport" class="inspection-viewport" tabindex="0" aria-label="Imagem ampliada; use as barras ou as setas para rolar">
           <p id="inspection-loading" role="status">Carregando quadro…</p><div id="inspection-image"></div></div>
+        <p class="image-note">Resolução do arquivo local. Zoom digital não recupera detalhes ausentes; esquema sintético não é vídeo.</p>
+        </div>
         <section id="contact-panel" class="contact-panel" aria-label="Evidência de contato">
           <h3>Evidência de contato</h3>
           <p class="contact-note">Anotar não libera posição ou associação. A projeção da bbox permanece diagnóstica.</p>
@@ -117,7 +131,6 @@
           <p class="contact-note">Até 1000 anotações por página. Fechar a inspeção descarta alterações não guardadas; o rascunho guardado permanece.</p>
         </section>
       </div>
-      <p class="map-note">Resolução do arquivo local, com caixas e IDs anotados. Zoom digital não recupera detalhes ausentes; esquema sintético não é vídeo.</p>
     </dialog>
     <footer>Laboratório de observações · associação entre câmeras e transferência de custódia ainda não implementadas.</footer>
   </main>

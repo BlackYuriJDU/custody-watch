@@ -43,6 +43,9 @@ def test_pagina_usa_assets_locais_e_nao_codigo_inline(replay_server):
     assert "/assets/replay_link.js" in text
     assert "/assets/map_positions.js" in text
     assert "/assets/camera_inspector.js" in text
+    assert "/assets/camera_wall.js" in text
+    assert 'id="layout-mosaic"' in text
+    assert 'id="layout-focus"' in text
     assert "/assets/contact_review.js" in text
     assert "/assets/contact_review_ui.js" in text
     assert "/assets/review_queue.js" in text
@@ -68,6 +71,7 @@ def test_pagina_usa_assets_locais_e_nao_codigo_inline(replay_server):
         "contact_review_ui.js",
         "review_queue.js",
         "review_queue_ui.js",
+        "camera_wall.js",
     ):
         with _get(replay_server, "/assets/" + asset) as response:
             assert "javascript" in response.headers["Content-Type"]
