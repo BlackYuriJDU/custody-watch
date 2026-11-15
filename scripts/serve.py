@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import sqlite3
 import sys
 import threading
 import time
@@ -52,6 +53,7 @@ from custody_watch.servidor import (
     so_nesta_maquina,
 )
 from custody_watch.source_health import SourceHealth
+from custody_watch.terminal_bag_archive import TerminalArchiveUnavailable, TerminalBagArchive
 from custody_watch.video import DEFAULT_MIN_CONFIDENCE, DEFAULT_WEIGHTS
 
 
@@ -134,6 +136,11 @@ def _argumentos() -> argparse.Namespace:
     )
     parser.add_argument("--journal-dir", type=Path, help="diretório para sessões novas do journal")
     parser.add_argument(
+        "--archive-terminal-bags",
+        action="store_true",
+        help="arquiva bagagens terminais por segmento; exige --journal-dir",
+    )
+    parser.add_argument(
         "--journal-part-records",
         type=_positive_int,
         default=10000,
@@ -177,12 +184,30 @@ def _argumentos() -> argparse.Namespace:
     args = parser.parse_args()
     if args.journal_fsync and args.journal_dir is None:
         parser.error("--journal-fsync exige --journal-dir")
+    if args.archive_terminal_bags and args.journal_dir is None:
+        parser.error("--archive-terminal-bags exige --journal-dir")
     if args.reconnect_attempts:
         if args.journal_dir is None:
             parser.error("--reconnect-attempts exige --journal-dir")
         if not fonte_de(args.fonte)[1] or args.passo != 1:
             parser.error("reconexão exige fonte live e --passo 1; arquivo nunca reconecta")
     return args
+
+
+def _live_session(args, plane, config, log: EventLog, journal: JournalWriter | None) -> LiveSession:
+    archive = None
+    if getattr(args, "archive_terminal_bags", False):
+        segment = None if journal is None else journal.segment_id
+        if segment is None:
+            raise ValueError("arquivo terminal exige journal com segmento ativo")
+        try:
+            archive = TerminalBagArchive(journal.directory / f"terminal-{segment}.sqlite")
+            return LiveSession(plane, config, events=log, terminal_archive=archive)
+        except (OSError, ValueError, sqlite3.Error) as error:
+            raise TerminalArchiveUnavailable(
+                "não foi possível iniciar o arquivo terminal"
+            ) from error
+    return LiveSession(plane, config, events=log)
 
 
 def _session(args, plane, config) -> tuple[LiveSession, JournalWriter | None]:
@@ -199,7 +224,9 @@ def _session(args, plane, config) -> tuple[LiveSession, JournalWriter | None]:
         log = EventLog(
             max_events=args.event_tail, sink=journal.emit if journal is not None else None
         )
-        return LiveSession(plane, config, events=log), journal
+        if getattr(args, "reconnect_attempts", 0):
+            return LiveSession(plane, config, events=log), journal
+        return _live_session(args, plane, config, log, journal), journal
     except Exception:
         if journal is not None:
             journal.close(reason="initialization_failed")
@@ -208,10 +235,14 @@ def _session(args, plane, config) -> tuple[LiveSession, JournalWriter | None]:
 
 def _journal_status(journal: JournalWriter | None, session: LiveSession) -> dict:
     status = journal.snapshot() if journal is not None else {"state": "disabled"}
-    return status | {
+    status = status | {
         "retained_events": len(session.events),
         "total_events": session.events.total_events,
     }
+    retention = session.retention_status()
+    if retention["enabled"]:
+        status["bag_retention"] = retention
+    return status
 
 
 def _recovery_detector(args):
@@ -314,7 +345,7 @@ def main() -> int:
             recovery = LiveRecovery(
                 capture_factory=_capture_factory(args),
                 detector_factory=_recovery_detector(args),
-                session_factory=lambda log: LiveSession(plane, config, events=log),
+                session_factory=lambda log: _live_session(args, plane, config, log, journal),
                 journal=journal,
                 painel=painel,
                 health=health,
@@ -383,6 +414,9 @@ def main() -> int:
     except Exception:
         if journal is not None:
             journal.finish_segment(interrupted=True, reason="processing_exception")
+        if sessao.retention_status()["state"] == "failed":
+            print("falha no arquivo terminal; processamento encerrado", file=sys.stderr)
+            return 1
         raise
     finally:
         parar.set()

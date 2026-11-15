@@ -12,6 +12,7 @@ from itertools import chain
 from .aovivo import CameraAoVivo, CaptureGap, processa
 from .event_journal import JournalWriter
 from .events import EventLog
+from .terminal_bag_archive import TerminalArchiveUnavailable
 
 
 @dataclass(frozen=True)
@@ -168,8 +169,13 @@ class LiveRecovery:
                 except KeyboardInterrupt:
                     self.stop.set()
                     raise
-                except Exception:
+                except Exception as error:
                     reason, fatal = "processing_exception", "processing_failed"
+                    if isinstance(error, TerminalArchiveUnavailable) or (
+                        self.session is not None
+                        and self.session.retention_status()["state"] == "failed"
+                    ):
+                        fatal = "archive_failed"
                     self.health.finish("interrupted", reason)
                 finally:
                     self._route(None)

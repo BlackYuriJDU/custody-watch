@@ -56,7 +56,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from itertools import combinations
 
 from .alerts import AlertItem, build_queue
@@ -921,6 +921,7 @@ class LiveSession:
         self._s = _Session(
             plane, config or Config(), events=events, terminal_archive=terminal_archive
         )
+        self._retention = self._s.registry.retention_status()
         self._trava = threading.Lock()
         """Apontar vem da thread do HTTP; alimentar vem da do detector. Sem a
         trava, um clique no meio de um quadro leria um registro pela metade."""
@@ -929,8 +930,20 @@ class LiveSession:
 
     def feed(self, t: float, tracked: list[TrackedDetection]) -> None:
         with self._trava:
-            self._ultimo_tracked = list(tracked)
-            self._alimenta(t, tracked)
+            try:
+                if self._s.registry.archive_failed:
+                    raise OSError("arquivo terminal falhou; encerre esta sessão")
+                self._ultimo_tracked = list(tracked)
+                self._alimenta(t, tracked)
+            finally:
+                self._retention = self._s.registry.retention_status()
+
+    def retention_status(self) -> dict:
+        """Último feed confirmado; HTTP não espera a trava de IO do feed."""
+        status = self._retention
+        if self._s.registry.archive_failed:
+            status = replace(status, state="failed")
+        return asdict(status)
 
     def _alimenta(self, t: float, tracked: list[TrackedDetection]) -> None:
         s = self._s
@@ -1027,6 +1040,7 @@ class LiveSession:
             que faz a regra P3 suprimir o desacompanhamento quando o dono
             também sai de quadro."""
             self._apontadas[bag.bag_id] = (px, py)
+            self._retention = s.registry.retention_status()
             return bag
 
     def aponta_dono(self, bag_id: int, px: float, py: float) -> Bag:

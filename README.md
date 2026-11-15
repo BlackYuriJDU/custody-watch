@@ -423,8 +423,29 @@ SQLite file, while keeping active and ambiguous custody in RAM:
 keyword; the path must be new and its parent must exist. Each archive belongs
 to one registry/association segment. Existing files are never reopened as new
 custody, and a different file/version/namespace fails instead of borrowing IDs.
-The archive is not yet wired into `serve.py` or automatic reconnection; that
-requires a separate segment lifecycle integration. The default stays in RAM.
+The server also accepts `--archive-terminal-bags`, requiring `--journal-dir`.
+For example, using an existing calibration and local weights:
+
+```powershell
+.venv\Scripts\python.exe scripts/serve.py 0 --calibration ground.json --weights C:/models/yolo26n.pt --journal-dir outputs/journal --archive-terminal-bags --reconnect-attempts 3
+```
+
+The default stays in RAM. The server creates `terminal-SEGMENT_ID.sqlite` inside
+the new journal session directory. With reconnection, archive creation is deferred
+until an actual capture segment starts; the provisional session does not occupy
+that filename. Each subsequent segment gets a new empty file. Old files remain
+historical and never restore identity, ownership or ambiguity into the new segment.
+
+The panel reports resident bags and terminal records with confirmed writes.
+Telemetry uses an immutable snapshot from the last feed/manual bag insertion,
+not a disk scan or a wait on the feed's IO lock. Alias counts are also available
+in `/estado` under `journal.bag_retention`. These are confirmed counts from this
+registry, not a continuous filesystem availability probe or a total memory bound.
+Archive failures become a visible failed status; another feed in that session is
+blocked even if the disk becomes available again. Reconnection does not hide
+storage/initialization failures: it stops with `archive_failed`, releases capture
+and preserves the interrupted journal. Correct the storage problem and explicitly
+start a new session; there is no implicit restore or retry of custody.
 
 Only terminal snapshots are persisted, with aliases in the same transaction.
 Objects leave RAM after commit succeeds; write failure propagates and retains
