@@ -45,6 +45,9 @@ def test_pagina_usa_assets_locais_e_nao_codigo_inline(replay_server):
     assert "/assets/camera_inspector.js" in text
     assert "/assets/contact_review.js" in text
     assert "/assets/contact_review_ui.js" in text
+    assert "/assets/review_queue.js" in text
+    assert "/assets/review_queue_ui.js" in text
+    assert 'id="queue-file" type="file"' in text
     assert 'id="contact-fields" disabled' in text
     assert '<dialog id="inspector" aria-labelledby="inspection-title">' in text
     assert '<input id="diagnostics" type="checkbox">' in text
@@ -60,7 +63,12 @@ def test_pagina_usa_assets_locais_e_nao_codigo_inline(replay_server):
     with _get(replay_server, "/assets/camera_inspector.js") as response:
         assert "javascript" in response.headers["Content-Type"]
         assert b"inspectionTarget" in response.read()
-    for asset in ("contact_review.js", "contact_review_ui.js"):
+    for asset in (
+        "contact_review.js",
+        "contact_review_ui.js",
+        "review_queue.js",
+        "review_queue_ui.js",
+    ):
         with _get(replay_server, "/assets/" + asset) as response:
             assert "javascript" in response.headers["Content-Type"]
             assert response.read()

@@ -21,6 +21,8 @@ ASSETS = {
     "/assets/camera_inspector.js": ("camera_inspector.js", "text/javascript; charset=utf-8"),
     "/assets/contact_review.js": ("contact_review.js", "text/javascript; charset=utf-8"),
     "/assets/contact_review_ui.js": ("contact_review_ui.js", "text/javascript; charset=utf-8"),
+    "/assets/review_queue.js": ("review_queue.js", "text/javascript; charset=utf-8"),
+    "/assets/review_queue_ui.js": ("review_queue_ui.js", "text/javascript; charset=utf-8"),
 }
 
 

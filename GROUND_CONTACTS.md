@@ -126,9 +126,35 @@ com inteiros exatos do painel são recusados. Não decodifica vídeo nem confirm
 visibilidade de pés. Uma falha de escrita pode deixar arquivo parcial; o comando
 recusa substituí-lo numa nova execução.
 
-Não há importação automática da fila no painel. Use `camera_id` e `global_t`
-para navegar no replay e confira os hashes no **Vínculo do quadro** antes de
-anotar. O intervalo vale por câmera; vistas diferentes e IDs no mesmo quadro
+No painel, **Carregar fila JSON local** lê o arquivo somente neste navegador,
+sem upload ou escrita no servidor. Confira origem/seed/parâmetros declarados
+e use **Abrir quadro da fila**, **Anterior** e **Próximo**. A navegação pausa
+o replay, muda câmera/andar e confere hashes, segmento, frame_index, tempos e IDs
+na imagem efetivamente retornada. Fonte ausente ou divergência bloqueia a revisão,
+sem substituir o quadro ou anotar desconhecido automaticamente. O formulário
+oferece somente os IDs de pessoas declarados naquele item. Uma inspeção manual
+fora dessa navegação permanece identificada como **Inspeção livre**.
+
+O carregador aceita v1/`sha256_rank_greedy_gap_v1`, JSON UTF-8 sem BOM, até 1 MiB,
+64 níveis, 256 câmeras, 1000 quadros e 1000 pares (quadro, ID). Confere campos,
+contagens, ordem/intervalo, parâmetros, partição das câmeras, relógio e vínculo
+com o cadastro carregado. Recusa chaves JSON repetidas, inclusive escapadas,
+IDs duplicados/inseguros, campos extras e arquivos incompatíveis, sem truncamento.
+Para filas maiores, reduza a cota no gerador; o painel não divide arquivos.
+Essas verificações não reexecutam o algoritmo de seleção sobre o cache inteiro:
+seed e política são declarações do arquivo, não prova de amostragem independente.
+
+O progresso conta apenas anotações guardadas no rascunho atual com a mesma chave
+de cadastro/câmera/segmento/sequência/quadro/ID. Um quadro só está completo quando
+todos os seus IDs foram guardados; observado, ocluído e desconhecido contam como
+declarações, não como acertos. Remover anotação desfaz seu progresso. Carregar,
+trocar ou remover fila conserva o rascunho; arquivo recusado conserva também a
+fila anterior. Trocar de quadro descarta campos ainda não guardados, sem criar
+contatos ou promover estimativa a revisão pessoal. Recarregar perde fila e
+rascunho: exporte antes. **Retomar quadro da fila** volta ao item selecionado
+quando uma inspeção manual estiver aberta.
+
+O intervalo vale por câmera; vistas diferentes e IDs no mesmo quadro
 continuam correlacionados. O limite de 1000 anotações por página continua válido,
 independentemente da quantidade de quadros selecionados.
 

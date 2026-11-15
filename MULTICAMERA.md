@@ -10,6 +10,7 @@ continuam planejadas. O roadmap separa implementações de validações ainda pe
 - [x] Recusar posições sem contato comprovado com o chão; projeção diagnóstica separada (#75).
 - [x] Definir evidência de contato por observação e avaliar casos exploratórios (#78).
 - [x] Selecionar IDs no quadro congelado, anotar contatos e exportar evidências (#89).
+- [x] Carregar fila vinculada, navegar quadros/câmeras e acompanhar rascunho (#98).
 - [ ] Validar confiabilidade e política de incerteza antes de liberar posições.
 - [ ] Medir associação conservadora entre vistas, incluindo recusas e ambiguidades.
 - [ ] Medir custódia entre vistas com anotações próprias de posse.
