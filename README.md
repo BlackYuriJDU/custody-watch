@@ -442,11 +442,24 @@ or point lookups in instrumentation/hot paths. Explicit historical enumeration
 is not a bounded-memory API.
 
 The harness reports resident objects in `counts` and disk rows separately in
-`archived_terminal`. It opens/closes SQLite connections per operation, with a
-bounded page cache; this is not a bound on total process/OS memory or disk use.
+`archived_terminal`. It opens/closes SQLite connections per operation, requesting
+a 256 KiB page-cache target; this is not a bound on total process/OS memory or disk use.
 Disk history grows, and no disk purge policy is implied. Remaining histories,
 groups, aliases of active bags and ambiguous custody can still exceed diagnostic
 budgets: the option does not make the whole #30 soak pass or define a production SLA.
+
+Paired synthetic result: [terminal retention, 2026-11-15](validation/terminal-retention-2026-11-15.json).
+One run per mode, same revision/configuration/seed 7 and 8000 input frames:
+80 resident bags without the archive versus 17 resident and 63 archived with it;
+17 nonterminal bags (including 15 ambiguous) and all 318 event payloads matched.
+Both modes still returned `budget_exceeded` for other retained state. In this
+single measurement, total instrumented time was 0.42655450000893325 s versus
+3.809852899998077 s and RSS was 56254464 versus 56913920 bytes: fewer resident
+bag objects did **not** establish lower process memory or a performance gain.
+The result identifies the clean code revision, source/output hashes and limits.
+Reproduce the command above with and without `--archive-terminal-bags`, using
+different new output directories; compare journal records with `kind=event`
+by `payload`, excluding per-run segment/session IDs and wall-clock metadata.
 
 `tracemalloc` measures allocations traced after its start, not every native
 allocation or VRAM. On Windows, process memory uses
