@@ -1,8 +1,9 @@
 "use strict";
 
 class ContactReviewUI {
-  constructor(registrySha256) {
+  constructor(registrySha256, onChange = null) {
     this.$ = id => document.getElementById(id);
+    this.onChange = onChange;
     this.store = /^[a-f0-9]{64}$/.test(registrySha256 || "") ? new ContactReview.ReviewStore(registrySha256) : null;
     this.context = null; this.image = null; this.size = null; this.overlay = null; this.exportSerial = 0;
     this.onImageClick = event => this.mark(event);
@@ -41,9 +42,9 @@ class ContactReviewUI {
     this.context = null; this.image = null; this.size = null; this.overlay = null;
     this.resetFields(); this.sync();
   }
-  open(config, camera, snapshot, image) {
+  open(config, camera, snapshot, image, queueItem = null) {
     this.close();
-    this.context = ContactReview.createReviewContext(config, camera, snapshot);
+    this.context = queueItem ? ReviewQueue.matchFrame(queueItem,config,camera,snapshot) : ContactReview.createReviewContext(config, camera, snapshot);
     this.image = image;
     const select = this.$("contact-id"), placeholder = document.createElement("option");
     placeholder.value = ""; placeholder.textContent = "Escolha um ID deste quadro";
@@ -165,6 +166,7 @@ class ContactReviewUI {
     this.$("contact-count").textContent = count === 1 ? "1 anotação guardada nesta página" : `${count} anotações guardadas nesta página`;
     for (const id of ["contact-export", "contact-export-modal"]) this.$(id).disabled = count === 0;
     this.$("contact-export-preview").textContent = this.store ? JSON.stringify(this.store.export(), null, 2) : "Ambiente sem vínculo para exportação.";
+    this.onChange?.();
   }
   download() {
     try {

@@ -7,7 +7,7 @@
   const seconds = value => `${Number(value).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})} s`;
   let config, state, selected = null, cursor = 0, generation = 0, controller, timer;
   let inspectionScale = 1, inspectionGeneration = 0, inspectionReturnId;
-  let contactReviewer;
+  let contactReviewer, queueReviewer;
   const make = (tag, text, className) => {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -164,7 +164,7 @@
     $("inspection-in").disabled = inspectionScale >= 4;
     contactReviewer?.zoom();
   }
-  function openInspection(camera, snapshot, returnId) {
+  function openInspection(camera, snapshot, returnId, queueItem = null) {
     const target = inspectionTarget(camera, snapshot);
     if (!target) return;
     stop();
@@ -189,18 +189,39 @@
       image.hidden = false; $("inspection-loading").hidden = true;
       $("inspection-resolution").textContent = target.kind === "schematic" ? "Esquema sintético vetorial · sem vídeo" : `${image.naturalWidth} × ${image.naturalHeight} px · arquivo local`;
       contactReviewer.ready(image.naturalWidth, image.naturalHeight);
+      queueReviewer?.imageReady(queueItem);
     };
     image.onerror = () => {
       if (!dialog.open || ticket !== inspectionGeneration) return;
       $("inspection-loading").textContent = "Imagem indisponível. Feche e tente novamente; o quadro não foi substituído.";
       contactReviewer.unavailable();
+      queueReviewer?.imageFailed(queueItem);
     };
     $("inspection-image").replaceChildren(image);
-    contactReviewer.open(config, camera, snapshot, image);
+    contactReviewer.open(config, camera, snapshot, image, queueItem);
     inspectionScale = 1; zoomInspection(0);
     $("inspection-viewport").scrollTop = 0; $("inspection-viewport").scrollLeft = 0;
     dialog.showModal();
+    queueReviewer?.inspectionOpened(queueItem);
     image.src = target.url;
+  }
+  async function openReviewItem(item, isCurrent) {
+    stop();
+    const dialog = $("inspector");
+    if (dialog.open) await new Promise(resolve => {
+      dialog.addEventListener("close",resolve,{once:true}); dialog.close();
+    });
+    if (!isCurrent()) return false;
+    const next = await seek(item.global_t);
+    if (!isCurrent() || !next || next !== state) return false;
+    const camera = config.cameras.find(value => value.camera_id === item.camera_id);
+    const snapshot = next.cameras.find(value => value.camera_id === item.camera_id);
+    if (!camera || !snapshot) throw new Error("Câmera da fila indisponível; revisão bloqueada.");
+    ReviewQueue.matchFrame(item,config,camera,snapshot);
+    selected = camera.camera_id; $("floor").value = camera.floor_id; render();
+    const returnId = `inspect-camera-${config.cameras.findIndex(value => value.camera_id === camera.camera_id)}`;
+    openInspection(camera,snapshot,returnId,item);
+    return true;
   }
   async function seek(t) {
     cursor = Math.max(config.timeline.start_s, Math.min(config.timeline.end_s, t));
@@ -215,6 +236,7 @@
       const next = await response.json();
       if (ticket !== generation) return;
       state = next; $("error").hidden = true; render();
+      return next;
     } catch (error) {
       if (error.name === "AbortError" || ticket !== generation) return;
       stop(); $("error").textContent = "Replay não atualizado. Verifique o servidor local e tente mover a linha de tempo."; $("error").hidden = false;
@@ -237,7 +259,10 @@
       const response = await fetch("/api/config");
       if (!response.ok) throw new Error("Configuração indisponível");
       config = await response.json();
-      contactReviewer = new ContactReviewUI(config.registry_sha256);
+      contactReviewer = new ContactReviewUI(config.registry_sha256, () => queueReviewer?.render());
+      queueReviewer = new ReviewQueueUI(config,contactReviewer,openReviewItem,() => {
+        if ($("inspector").open) $("inspector").close();
+      });
       $("site").textContent = `${config.site_id} · Referenciais locais, sem identidade global`;
       for (const floor of config.floors) { const option = make("option", floor.floor_id); option.value = floor.floor_id; $("floor").append(option); }
       const target = replayTarget(window.location.search, config);
@@ -256,6 +281,7 @@
       $("inspector").addEventListener("close", () => {
         ++inspectionGeneration;
         contactReviewer.close();
+        queueReviewer?.inspectionOpened(null);
         $("inspection-image").replaceChildren();
         document.getElementById(inspectionReturnId)?.focus();
       });

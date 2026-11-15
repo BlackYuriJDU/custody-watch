@@ -36,6 +36,8 @@ $env:PYTHONPATH = Join-Path (Get-Location).Path 'src'
   incerteza suprime alertas; flags descrevem relações, nunca atributos pessoais.
 - Retenção: confirme persistência antes de liberar RAM; preserve tombstones/aliases
   por segmento e reporte residentes e arquivo em disco separadamente.
+- JSON não confiável: imponha limites e varra strings sequencialmente; teste entradas
+  malformadas para evitar custo excessivo de regex durante a validação.
 - Preserve fontes, dados e resultados. Toda métrica cita o arquivo de resultado
   e informa modo, split, seed (ou ausência) e quantidade de runs; não invente números.
   Nos recortes oracle atuais, IDs e caixas vêm do gabarito: não demonstram detector,

@@ -9,7 +9,9 @@
   <script src="/assets/map_positions.js" defer></script>
   <script src="/assets/camera_inspector.js" defer></script>
   <script src="/assets/contact_review.js" defer></script>
+  <script src="/assets/review_queue.js" defer></script>
   <script src="/assets/contact_review_ui.js" defer></script>
+  <script src="/assets/review_queue_ui.js" defer></script>
   <script src="/assets/multicamera.js" defer></script>
 </head>
 <body>
@@ -51,6 +53,17 @@
         <label class="speed-label" for="speed">Velocidade <select id="speed"><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div>
         <span class="time-extent" id="extent"></span></div>
     </section>
+    <section class="panel review-queue" aria-label="Fila de revisão">
+      <h2>Fila de revisão</h2>
+      <label for="queue-file">Carregar fila JSON local</label><input id="queue-file" type="file" accept=".json,application/json">
+      <p id="queue-policy" class="contact-note"></p><output id="queue-position">Nenhuma fila carregada.</output>
+      <div class="queue-controls"><button id="queue-prev" class="secondary" type="button" aria-label="Quadro anterior da fila" disabled>← Anterior</button>
+        <button id="queue-open" class="secondary" type="button" disabled>Abrir quadro da fila</button>
+        <button id="queue-next" class="secondary" type="button" aria-label="Próximo quadro da fila" disabled>Próximo →</button>
+        <button id="queue-clear" class="secondary" type="button" disabled>Remover fila</button></div>
+      <output id="queue-progress"></output><p id="queue-message" class="contact-feedback" role="status"></p>
+      <p class="contact-note">Leitura apenas neste navegador, sem upload. Até 1 MiB, 1000 quadros e 1000 pares quadro/ID. Trocar de quadro descarta campos não guardados. Recarregar perde fila e rascunho; exporte as anotações.</p>
+    </section>
     <section class="panel contact-export-bar" aria-label="Rascunho de evidências">
       <div><strong id="contact-count">0 anotações guardadas nesta página</strong>
         <p>Rascunho temporário. Exporte antes de recarregar ou fechar a página.</p></div>
@@ -62,6 +75,13 @@
         <button id="inspection-close" class="secondary" type="button">Fechar inspeção</button></div>
       <p id="inspection-clock"></p>
       <p class="inspection-warning">Quadro congelado · replay pausado. IDs locais; posição no chão não qualificada.</p>
+      <section id="queue-navigation-modal" class="queue-modal" aria-label="Navegação da fila" hidden>
+        <output id="queue-position-modal"></output>
+        <div class="queue-controls"><button id="queue-prev-modal" class="secondary" type="button" aria-label="Quadro anterior na inspeção" disabled>← Anterior</button>
+          <button id="queue-open-modal" class="secondary" type="button" disabled>Retomar quadro da fila</button>
+          <button id="queue-next-modal" class="secondary" type="button" aria-label="Próximo quadro na inspeção" disabled>Próximo →</button></div>
+        <output id="queue-progress-modal"></output><p id="queue-message-modal" class="contact-feedback" role="status"></p>
+      </section>
       <div class="inspection-controls"><button id="inspection-out" class="secondary" type="button" aria-label="Reduzir zoom">−</button>
         <output id="inspection-zoom" aria-live="polite">100%</output>
         <button id="inspection-in" class="secondary" type="button" aria-label="Ampliar zoom">+</button>
