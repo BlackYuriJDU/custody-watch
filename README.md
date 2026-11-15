@@ -448,13 +448,13 @@ Disk history grows, and no disk purge policy is implied. Remaining histories,
 groups, aliases of active bags and ambiguous custody can still exceed diagnostic
 budgets: the option does not make the whole #30 soak pass or define a production SLA.
 
-Paired synthetic result: [terminal retention, 2026-11-15](validation/terminal-retention-2026-11-15.json).
+Paired synthetic result: [terminal retention, 2026-11-15](validation/terminal-retention-final-2026-11-15.json).
 One run per mode, same revision/configuration/seed 7 and 8000 input frames:
 80 resident bags without the archive versus 17 resident and 63 archived with it;
 17 nonterminal bags (including 15 ambiguous) and all 318 event payloads matched.
 Both modes still returned `budget_exceeded` for other retained state. In this
-single measurement, total instrumented time was 0.42655450000893325 s versus
-3.809852899998077 s and RSS was 56254464 versus 56913920 bytes: fewer resident
+single measurement, total instrumented time was 0.43302380001114216 s versus
+3.807727099992917 s and RSS was 55873536 versus 56983552 bytes: fewer resident
 bag objects did **not** establish lower process memory or a performance gain.
 The result identifies the clean code revision, source/output hashes and limits.
 Reproduce the command above with and without `--archive-terminal-bags`, using
