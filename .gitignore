@@ -29,6 +29,10 @@ outputs/
 runs/
 clips/
 *.log
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
 # OS / editor
 .DS_Store

@@ -68,6 +68,7 @@ from .flags import FlagStore, flag_contact, flag_for_removal, flag_proximity
 from .ground_plane import GroundPlane
 from .party import PartyManager, is_comoving
 from .reid import TrackLinker
+from .terminal_bag_archive import TerminalBagArchive
 from .tracking import PlausibilityGate, TrackedDetection, anchor_vetoes, to_observations
 from .types import (
     BAG_CLASSES,
@@ -252,14 +253,21 @@ _NAO_ANCORA = _NaoAncora()
 class _Session:
     """Estado de uma passagem sobre um vídeo. Descartado ao fim."""
 
-    def __init__(self, plane: GroundPlane, config: Config, events: EventLog | None = None) -> None:
+    def __init__(
+        self,
+        plane: GroundPlane,
+        config: Config,
+        events: EventLog | None = None,
+        *,
+        terminal_archive: TerminalBagArchive | None = None,
+    ) -> None:
         self.plane = plane
         self.config = config
 
         self.events = events if events is not None else EventLog()
         self.flags = FlagStore()
         self.parties = PartyManager(config.party)
-        self.registry = BagRegistry(config.registry)
+        self.registry = BagRegistry(config.registry, terminal_archive=terminal_archive)
         self.linker = TrackLinker(config.reid)
         self.gate = PlausibilityGate(config.pipeline.max_observation_speed_ms)
 
@@ -899,10 +907,17 @@ class LiveSession:
     """
 
     def __init__(
-        self, plane: GroundPlane, config: Config | None = None, *, events: EventLog | None = None
+        self,
+        plane: GroundPlane,
+        config: Config | None = None,
+        *,
+        events: EventLog | None = None,
+        terminal_archive: TerminalBagArchive | None = None,
     ) -> None:
         self._plane = plane
-        self._s = _Session(plane, config or Config(), events=events)
+        self._s = _Session(
+            plane, config or Config(), events=events, terminal_archive=terminal_archive
+        )
         self._trava = threading.Lock()
         """Apontar vem da thread do HTTP; alimentar vem da do detector. Sem a
         trava, um clique no meio de um quadro leria um registro pela metade."""
@@ -936,6 +951,7 @@ class LiveSession:
         seen = s.observe_bags(bags, people)
         s.relational_flags(people)
         s.resolve_removals(seen, people)
+        s.registry.archive_terminal_bags()
 
     @property
     def t(self) -> float:
@@ -1019,7 +1035,7 @@ class LiveSession:
         """
         with self._trava:
             s = self._s
-            bag = next((b for b in s.registry.all() if b.bag_id == bag_id), None)
+            bag = s.registry.get(bag_id)
             if bag is None:
                 raise ValueError(f"bagagem {bag_id} não existe")
 

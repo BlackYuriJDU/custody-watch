@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from .config import RegistryConfig
 from .events import Event, EventKind, EventLog
+from .terminal_bag_archive import TerminalBagArchive
 from .types import TERMINAL_BAG_STATES, Bag, BagState, Observation, Point
 
 DEFAULT_REGISTRY = RegistryConfig()
@@ -21,14 +22,25 @@ AMBIGUITY_RADIUS_M = DEFAULT_REGISTRY.ambiguity_radius_m
 
 
 class BagRegistry:
-    def __init__(self, config: RegistryConfig = DEFAULT_REGISTRY) -> None:
+    def __init__(
+        self,
+        config: RegistryConfig = DEFAULT_REGISTRY,
+        *,
+        terminal_archive: TerminalBagArchive | None = None,
+    ) -> None:
         self._bags: dict[int, Bag] = {}
         self._by_track: dict[int, int] = {}
         self._unresolved: dict[int, Bag] = {}
         self._config = config
+        self._archive = terminal_archive
+        if self._archive is not None:
+            self._archive.claim()
 
     def get(self, bag_id: int) -> Bag | None:
-        return self._bags.get(bag_id)
+        bag = self._bags.get(bag_id)
+        if bag is not None or self._archive is None:
+            return bag
+        return self._archive.get(bag_id)
 
     def get_by_track(self, track_id: int) -> Bag | None:
         """Bagagem que responde por este track.
@@ -38,20 +50,38 @@ class BagRegistry:
         por isso que o default do mapa é o próprio `track_id` — nada precisa
         migrar.
         """
-        return self._bags.get(self._by_track.get(track_id, track_id))
+        bag_id = self._by_track.get(track_id)
+        if bag_id is None:
+            bag_id = track_id if self._archive is None else self._archive.canonical(track_id)
+        return self.get(bag_id)
 
     def link_track(self, track_id: int, bag_id: int) -> None:
         """Faz um track novo responder por uma bagagem já registrada."""
+        if self._archive is not None:
+            previous = self._archive.get(self._archive.canonical(track_id))
+            if previous is not None and previous.bag_id != bag_id:
+                raise ValueError("ID terminal não pode trocar de bagagem")
         if bag_id not in self._bags:
+            if self._archive is not None and self._archive.get(bag_id) is not None:
+                self._archive.link(track_id, bag_id)
+                return
             raise KeyError(f"bagagem {bag_id} não registrada")
         self._by_track[track_id] = bag_id
 
-    def links(self) -> dict[int, int]:
+    def links(self, *, track_ids: set[int] | None = None) -> dict[int, int]:
         """Mapa de track bruto para `bag_id` canônico, só onde houve
         religação. Espelha `TrackLinker.links()`: enquanto não há religação o
         track responde por si mesmo e não precisa aparecer aqui.
         """
-        return dict(self._by_track)
+        links = {} if self._archive is None else self._archive.links(track_ids)
+        links.update(
+            {
+                track: bag
+                for track, bag in self._by_track.items()
+                if track_ids is None or track in track_ids
+            }
+        )
+        return links
 
     def occluded_near(self, position: Point, radius: float) -> list[Bag]:
         """Bagagens invisíveis cuja âncora está dentro do raio.
@@ -71,7 +101,39 @@ class BagRegistry:
         ]
 
     def all(self) -> list[Bag]:
+        history = [] if self._archive is None else self._archive.all()
+        return [*self.resident(), *history]
+
+    def resident(self) -> list[Bag]:
+        """Somente objetos residentes; o histórico em disco exige all/get."""
         return list(self._bags.values())
+
+    def archived_counts(self) -> dict[str, int]:
+        return {"bags": 0, "bag_links": 0} if self._archive is None else self._archive.counts()
+
+    def _archive_terminal(self, bag: Bag) -> None:
+        if self._archive is None:
+            return
+        aliases = {
+            track: target for track, target in self._by_track.items() if target == bag.bag_id
+        }
+        self._archive.persist(bag, aliases)
+        # A transação já foi confirmada. Em erro, todas as referências ficam em RAM.
+        self._bags.pop(bag.bag_id)
+        for track in aliases:
+            self._by_track.pop(track)
+
+    def archive_terminal_bags(self) -> int:
+        """Arquiva somente custódias encerradas; sem arquivo é uma operação nula."""
+        if self._archive is None:
+            return 0
+        count = 0
+        for bag_id, bag in list(self._unresolved.items()):
+            if bag.state in TERMINAL_BAG_STATES:
+                self._archive_terminal(bag)
+                self._unresolved.pop(bag_id)
+                count += 1
+        return count
 
     def unresolved(self) -> list[Bag]:
         """Índice de custódias não terminais, incluindo as ambíguas.
@@ -79,12 +141,15 @@ class BagRegistry:
         Custódia terminal é irreversível no domínio. Como a resolução escreve
         em Bag.state, retirar do índice na próxima consulta observa também
         transições feitas por custody.py. Não varre tombstones de consultas
-        anteriores, nem apaga registro, posse, alias ou evidência histórica.
+        anteriores. Com arquivo opt-in, confirma snapshot/aliases antes de
+        retirar seus objetos da RAM; sem arquivo, conserva o registro completo.
+        Posse e histórico permanecem consultáveis nos dois modos.
         Ambiguidade permanece: ela suprime sinais, mas não encerra custódia.
         """
         current = []
         for bag_id, bag in list(self._unresolved.items()):
             if bag.state in TERMINAL_BAG_STATES:
+                self._archive_terminal(bag)
                 self._unresolved.pop(bag_id, None)
             else:
                 current.append(bag)
@@ -130,6 +195,8 @@ class BagRegistry:
                 )
             return bag
 
+        if self._archive is not None and bag.bag_id not in self._bags:
+            return bag  # snapshot terminal congelado; não reabre custódia
         if bag.anchor.distance_to(observation.position) >= self._config.moved_threshold_m:
             bag.anchor = observation.position
         bag.last_seen = observation.t
@@ -154,6 +221,12 @@ class BagRegistry:
         `t` é o instante do frame; o default existe só para não quebrar
         chamadas antigas. Quando `events` é `None`, nada é emitido.
         """
+        if (
+            bag_id not in self._bags
+            and self._archive is not None
+            and self._archive.get(bag_id) is not None
+        ):
+            raise ValueError("custódia arquivada não pode receber outro dono")
         self._bags[bag_id].owner_party = party_id
 
         if events is not None:
