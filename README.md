@@ -1,5 +1,7 @@
 # custody-watch
 
+[![checks](https://github.com/marcus-vreis/custody-watch/actions/workflows/checks.yml/badge.svg)](https://github.com/marcus-vreis/custody-watch/actions/workflows/checks.yml) [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE) ![Python >=3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)
+
 Detecting **luggage custody changes** in airport surveillance video — not faces, not "suspicious people".
 
 > **Status:** runs end to end, from an `.mp4` to a ranked review page for a human operator. Local CPU verification on Windows (2026-11-06): 838 passed, 1 skipped (external CAVIAR footage unavailable).
@@ -788,3 +790,7 @@ Python 3.12 · [uv](https://docs.astral.sh/uv/) · YOLO26 behind a swappable `De
 ## Licence
 
 [AGPL-3.0](LICENSE), inherited from Ultralytics. The `Detector` interface exists partly so that swapping to an Apache-2.0 model (RF-DETR, D-FINE) stays a contained change.
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting and the HTTP servers' threat model,
+[PRIVACY.md](PRIVACY.md) for what the software processes and stores, and
+[CITATION.cff](CITATION.cff) for how to cite it.

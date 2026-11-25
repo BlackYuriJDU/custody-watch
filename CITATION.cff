@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "custody-watch"
+abstract: >-
+  Detection of luggage custody changes in airport surveillance video. It ranks
+  clips for a human operator, tracks which bags belong to which travelling
+  group, and uses no facial recognition, identity database or biometric
+  storage.
+type: software
+authors:
+  - given-names: Marcus
+    family-names: Vinicius
+repository-code: "https://github.com/marcus-vreis/custody-watch"
+license: AGPL-3.0-only
+version: 0.0.1
+keywords:
+  - computer-vision
+  - surveillance
+  - object-tracking
+  - airport-security
