@@ -2,7 +2,6 @@
 
 (() => {
   const $ = id => document.getElementById(id);
-  const colors = ["#83c8b4", "#8bb9e0", "#e9b478", "#c5aed9"];
   const labels = {not_started: "Não iniciada", observed: "Quadro disponível", missing: "Quadro ausente", stale: "Sem quadro recente", completed: "Gravação concluída", unavailable: "Sem observações"};
   const seconds = value => `${Number(value).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})} s`;
   let config, state, selected = null, layout = "mosaic", cursor = 0, generation = 0, controller, timer;
@@ -21,7 +20,7 @@
     return node;
   };
   const keyOf = track => JSON.stringify(track.track_key);
-  const colorFor = camera => colors[config.cameras.findIndex(c => c.camera_id === camera.camera_id) % colors.length];
+  const theme = () => mapTheme(name => getComputedStyle(document.documentElement).getPropertyValue(name));
 
   function renderMap() {
     const floor = config.floors.find(f => f.floor_id === $("floor").value);
@@ -48,14 +47,15 @@
     const minY = Math.min(0, ...ys) - 1, maxY = Math.max(6, ...ys) + 1;
     const x = value => 52 + (value - minX) / (maxX - minX) * 535;
     const y = value => 365 - (value - minY) / (maxY - minY) * 315;
-    const map = $("map");
+    const map = $("map"), colors = theme();
+    const colorFor = camera => colors.cameras[config.cameras.findIndex(c => c.camera_id === camera.camera_id) % colors.cameras.length];
     map.replaceChildren();
     for (let i = 0; i <= 6; i++) {
       const px = 52 + i * 535 / 6, py = 50 + i * 315 / 6;
-      map.append(svg("line", {x1: px, y1: 50, x2: px, y2: 365, stroke: "#253345", "stroke-width": .6}));
-      map.append(svg("line", {x1: 52, y1: py, x2: 587, y2: py, stroke: "#253345", "stroke-width": .6}));
-      map.append(svg("text", {x: px, y: 388, fill: "#8293a8", "font-size": 10, "text-anchor": "middle"}, (minX + i * (maxX - minX) / 6).toFixed(1)));
-      map.append(svg("text", {x: 40, y: py + 3, fill: "#8293a8", "font-size": 10, "text-anchor": "end"}, (maxY - i * (maxY - minY) / 6).toFixed(1)));
+      map.append(svg("line", {x1: px, y1: 50, x2: px, y2: 365, stroke: colors.grid, "stroke-width": .6}));
+      map.append(svg("line", {x1: 52, y1: py, x2: 587, y2: py, stroke: colors.grid, "stroke-width": .6}));
+      map.append(svg("text", {x: px, y: 388, fill: colors.axis, "font-size": 10, "text-anchor": "middle"}, (minX + i * (maxX - minX) / 6).toFixed(1)));
+      map.append(svg("text", {x: 40, y: py + 3, fill: colors.axis, "font-size": 10, "text-anchor": "end"}, (maxY - i * (maxY - minY) / 6).toFixed(1)));
     }
     for (const camera of cameras) {
       const color = colorFor(camera), opacity = selected && selected !== camera.camera_id ? .55 : 1;
@@ -64,7 +64,7 @@
         const px = x(camera.position_m[0]), py = y(camera.position_m[1]);
         const mapId = `select-map-camera-${config.cameras.indexOf(camera)}`;
         const group = svg("g", {id: mapId, role: "button", tabindex: 0, "aria-label": `Selecionar ${camera.camera_id} na planta`, opacity});
-        group.append(svg("rect", {x: px - 10, y: py - 8, width: 20, height: 16, rx: 4, fill: "#162531", stroke: color, "stroke-width": 1.5}));
+        group.append(svg("rect", {x: px - 10, y: py - 8, width: 20, height: 16, rx: 4, fill: colors.body, stroke: color, "stroke-width": 1.5}));
         group.append(svg("path", {d: `M ${px + 10} ${py - 4} l 7 -3 v 14 l -7 -3 Z`, fill: color}));
         group.append(svg("text", {x: px, y: py + 25, fill: color, "font-size": 10, "text-anchor": "middle"}, camera.camera_id));
         const choose = () => { selected = camera.camera_id; render(); document.getElementById(mapId)?.focus(); };
@@ -84,7 +84,7 @@
         else group.append(svg("polygon", {...attrs, points: `${px},${py-7} ${px+7},${py} ${px},${py+7} ${px-7},${py}`}));
         const label = `${camera.camera_id} · #${track.track_key.local_track_id} · ?${old ? ` · há ${seconds(track.age_s)}` : ""}`;
         const person = track.cls === "person";
-        group.append(svg("text", {x: px + (person ? -14 : 14), y: py + (cameraIndex % 2 ? 22 : -13), "text-anchor": person ? "end" : "start", fill: color, "font-size": 10, "paint-order": "stroke", stroke: "#111a25", "stroke-width": 3}, label));
+        group.append(svg("text", {x: px + (person ? -14 : 14), y: py + (cameraIndex % 2 ? 22 : -13), "text-anchor": person ? "end" : "start", fill: color, "font-size": 10, "paint-order": "stroke", stroke: colors.halo, "stroke-width": 3}, label));
         const kind = {person: "Pessoa", suitcase: "Mala", backpack: "Mochila", handbag: "Bolsa"}[track.cls] || track.cls;
         group.append(svg("title", {}, `${kind} · ${label} · segmento ${track.track_key.segment_id} · projeção diagnóstica; contato no chão não verificado · ${track.position_status}`));
         map.append(group);
@@ -304,5 +304,9 @@
       await seek(target.t);
     } catch (error) { $("error").textContent = "Não foi possível carregar o laboratório. Verifique o servidor local."; $("error").hidden = false; }
   }
+  // A planta lê as cores do tema ao desenhar: redesenha quando o tema muda.
+  const redrawTheme = () => { if (config && state) renderMap(); };
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener?.("change", redrawTheme);
+  new MutationObserver(redrawTheme).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
   void init();
 })();

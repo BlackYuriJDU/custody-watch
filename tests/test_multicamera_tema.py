@@ -79,6 +79,16 @@ PARES = [
     ("camera-1", "surface", 3.0),
     ("camera-2", "surface", 3.0),
     ("camera-3", "surface", 3.0),
+    # planta: tokens próprios da planta sobre o fundo dela
+    ("mapa-eixo", "mapa", 4.5),
+    ("camera-0", "mapa", 3.0),
+    ("camera-1", "mapa", 3.0),
+    ("camera-2", "mapa", 3.0),
+    ("camera-3", "mapa", 3.0),
+    ("camera-0", "mapa-corpo", 3.0),
+    ("camera-1", "mapa-corpo", 3.0),
+    ("camera-2", "mapa-corpo", 3.0),
+    ("camera-3", "mapa-corpo", 3.0),
     ("erro-borda", "erro-fundo", 3.0),
     ("historico-borda", "historico-fundo", 3.0),
 ]

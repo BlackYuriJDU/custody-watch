@@ -37,7 +37,11 @@
   --nota-texto: #4A5562;
   --quadro: #080A0C;
   --quadro-borda: #2B3035;
-  --mapa: #14191C;
+  --mapa: #F7F9FA;
+  --mapa-grade: #D3DAE0;
+  --mapa-eixo: #556170;
+  --mapa-corpo: #FFFFFF;
+  --mapa-halo: #FFFFFF;
   --sobre-quadro: #E2E8EE;
   --veu: #121416ED;
   --sombra: #14181C40;
@@ -84,6 +88,10 @@
     --quadro: #080A0C;
     --quadro-borda: #2B3035;
     --mapa: #14191C;
+    --mapa-grade: #253345;
+    --mapa-eixo: #8293A8;
+    --mapa-corpo: #162531;
+    --mapa-halo: #111A25;
     --sobre-quadro: #E2E8EE;
     --veu: #121416ED;
     --sombra: #00000099;
@@ -128,6 +136,10 @@
   --quadro: #080A0C;
   --quadro-borda: #2B3035;
   --mapa: #14191C;
+  --mapa-grade: #253345;
+  --mapa-eixo: #8293A8;
+  --mapa-corpo: #162531;
+  --mapa-halo: #111A25;
   --sobre-quadro: #E2E8EE;
   --veu: #121416ED;
   --sombra: #00000099;

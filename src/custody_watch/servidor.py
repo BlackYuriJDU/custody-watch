@@ -498,81 +498,161 @@ PAGINA = """<!doctype html>
 <title>Custódia ao vivo</title>
 <style>
 :root {
-  --fundo: #f4f5f7; --painel: #ffffff; --texto: #1d2129; --suave: #5f6673;
-  --borda: #dde0e6; --n3: #d42f2f; --n2: #d9822b; --ancora: #1f8fb3;
-  --aviso-fundo: #fff4d6; --aviso-borda: #e0b43a;
+  color-scheme: light dark;
+  /* Tokens da central multicâmera e da página de revisão: mesmos nomes e valores. */
+  --ground: #F1F3F5;
+  --surface: #FFFFFF;
+  --raised: #E8ECEF;
+  --ink: #14181C;
+  --muted: #667484;
+  --hairline: #D3DAE0;
+  --accent: #C4551F;
+  --grave: #B03A2E;
+  --media: #B5762A;
+  --leve: #5E7387;
+  --muted-text: #556170;
+  --accent-text: #A8430E;
+  --edge: #7A8794;
+  --selecao-fundo: #FBE6DA;
+  --historico-fundo: #FFF1D6;
+  --historico-borda: #B5762A;
+  --historico-texto: #6B430A;
+  --erro-texto: #8C2A20;
+  --quadro: #080A0C;
+  --display: Bahnschrift, "Trebuchet MS", sans-serif;
+  --body: "Segoe UI", sans-serif; --mono: Consolas, "Liberation Mono", monospace;
+  /* Próprios do painel: selo de severidade (texto sobre fundo cheio). */
+  --grave-solid: #B03A2E;
+  --media-solid: #87560E;
+  --leve-solid: #556170;
+  --on-solid: #FFFFFF;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --fundo: #111418; --painel: #1a1f26; --texto: #e6e9ee; --suave: #9aa3b0;
-    --borda: #2c333d; --n3: #ff5c5c; --n2: #f4a261; --ancora: #48cae4;
-    --aviso-fundo: #3a3016; --aviso-borda: #b8902a;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0E1216;
+    --surface: #161C22;
+    --raised: #1E262E;
+    --ink: #E2E8EE;
+    --muted: #8A98A6;
+    --hairline: #2A343D;
+    --accent: #E0662E;
+    --grave: #D9584B;
+    --media: #D2913C;
+    --leve: #7E95A8;
+    --muted-text: #8A98A6;
+    --accent-text: #F0814F;
+    --edge: #687888;
+    --selecao-fundo: #3A2A20;
+    --historico-fundo: #291E10;
+    --historico-borda: #9F783F;
+    --historico-texto: #FFD394;
+    --erro-texto: #FFB4A9;
+    --quadro: #080A0C;
+    --grave-solid: #D9584B;
+    --media-solid: #D2913C;
+    --leve-solid: #7E95A8;
+    --on-solid: #14181C;
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0E1216;
+  --surface: #161C22;
+  --raised: #1E262E;
+  --ink: #E2E8EE;
+  --muted: #8A98A6;
+  --hairline: #2A343D;
+  --accent: #E0662E;
+  --grave: #D9584B;
+  --media: #D2913C;
+  --leve: #7E95A8;
+  --muted-text: #8A98A6;
+  --accent-text: #F0814F;
+  --edge: #687888;
+  --selecao-fundo: #3A2A20;
+  --historico-fundo: #291E10;
+  --historico-borda: #9F783F;
+  --historico-texto: #FFD394;
+  --erro-texto: #FFB4A9;
+  --quadro: #080A0C;
+  --grave-solid: #D9584B;
+  --media-solid: #D2913C;
+  --leve-solid: #7E95A8;
+  --on-solid: #14181C;
+}
 * { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--fundo); color: var(--texto);
-  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+body { margin: 0; background: var(--ground); color: var(--ink); font: .875rem/1.5 var(--body); }
+button { font: inherit; cursor: pointer; touch-action: manipulation; }
+button:disabled { cursor: default; opacity: .45; }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 4px;
 }
 header {
   display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline;
-  padding: 12px 16px; border-bottom: 1px solid var(--borda); background: var(--painel);
+  padding: 12px 16px; border-bottom: 1px solid var(--hairline); background: var(--surface);
 }
-header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-.medida { color: var(--suave); font-variant-numeric: tabular-nums; }
-.medida b { color: var(--texto); font-weight: 600; }
-#conexao { margin-left: auto; font-size: 12px; color: var(--suave); }
+header h1 { font: 500 1.0625rem/1.3 var(--display); letter-spacing: -.2px; margin: 0; }
+.medida { color: var(--muted-text); font-variant-numeric: tabular-nums; }
+.medida b { color: var(--ink); font-weight: 600; }
+#conexao { margin-left: auto; font-size: .75rem; color: var(--muted-text); }
 .barra { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .barra button {
-  font: inherit; padding: 5px 12px; border-radius: 6px; cursor: pointer;
-  border: 1px solid var(--borda); background: var(--painel); color: var(--texto);
+  min-height: 36px; padding: 7px 13px; border-radius: 5px; font-size: .75rem; font-weight: 600;
+  border: 1px solid var(--edge); background: var(--raised); color: var(--ink);
 }
+.barra button:hover:enabled { background: var(--hairline); border-color: var(--muted-text); }
 .barra button[aria-pressed="true"] {
-  border-color: var(--ancora); color: var(--ancora); font-weight: 600;
+  background: var(--selecao-fundo); border-color: var(--accent); color: var(--accent-text);
 }
-#instrucao { color: var(--suave); font-size: 13px; }
-#instrucao.erro { color: var(--n3); }
+#instrucao { color: var(--muted-text); font-size: .8125rem; }
+#instrucao.erro { color: var(--erro-texto); }
 #video.apontando { cursor: crosshair; }
-#conexao.caiu { color: var(--n3); font-weight: 600; }
+#conexao.caiu { color: var(--erro-texto); font-weight: 600; }
 main {
   display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px;
 }
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 #video {
-  width: 100%; height: auto; display: block; background: #000; border-radius: 6px;
+  width: 100%; height: auto; display: block; background: var(--quadro); border-radius: 6px;
   min-height: 200px;
 }
-#video.historico { outline: 2px solid var(--aviso-borda); }
+#video.historico { outline: 2px solid var(--historico-borda); }
 #fonte { display: flex; gap: 6px 16px; flex-wrap: wrap; }
-#fonte .detalhe { color: var(--suave); }
+#fonte .detalhe { color: var(--historico-texto); }
 section h2 {
-  font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--suave); margin: 0 0 8px; font-weight: 600;
+  font: .75rem var(--mono); text-transform: uppercase; letter-spacing: 1.5px;
+  color: var(--muted-text); margin: 0 0 8px; font-weight: 600;
 }
 section + section { margin-top: 20px; }
 #avisos:empty { display: none; }
 #journal:empty { display: none; }
 .aviso {
-  background: var(--aviso-fundo); border: 1px solid var(--aviso-borda);
+  background: var(--historico-fundo); border: 1px solid var(--historico-borda);
+  color: var(--historico-texto);
   border-radius: 6px; padding: 10px 12px; margin: 0 16px; margin-top: 12px;
 }
 .item {
-  background: var(--painel); border: 1px solid var(--borda); border-left-width: 4px;
+  background: var(--surface); border: 1px solid var(--hairline); border-left-width: 4px;
   border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;
 }
-.item.N3 { border-left-color: var(--n3); }
-.item.N2 { border-left-color: var(--n2); }
+.item.N3 { border-left-color: var(--grave); }
+.item.N2 { border-left-color: var(--media); }
+.item.N1, .item.N0 { border-left-color: var(--leve); }
 .item .topo { display: flex; gap: 8px; align-items: baseline; }
-.nivel { font-weight: 700; font-size: 12px; padding: 1px 6px; border-radius: 4px; color: #fff; }
-.N3 .nivel { background: var(--n3); }
-.N2 .nivel { background: var(--n2); }
-.N1 .nivel, .N0 .nivel { background: var(--suave); }
+.nivel {
+  font-weight: 700; font-size: .75rem; padding: 1px 6px; border-radius: 4px;
+  color: var(--on-solid);
+}
+.N3 .nivel { background: var(--grave-solid); }
+.N2 .nivel { background: var(--media-solid); }
+.N1 .nivel, .N0 .nivel { background: var(--leve-solid); }
 .item ul { margin: 6px 0 0; padding-left: 18px; }
-.vazio { color: var(--suave); font-style: italic; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-td { padding: 4px 6px; border-bottom: 1px solid var(--borda); vertical-align: top; }
-td.t { color: var(--suave); font-variant-numeric: tabular-nums; white-space: nowrap; }
-tr.estranho td { color: var(--n3); font-weight: 600; }
+.vazio { color: var(--muted-text); font-style: italic; }
+table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+td { padding: 4px 6px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+td.t { color: var(--muted-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.estranho td { color: var(--erro-texto); font-weight: 600; }
 </style>
 </head>
 <body>
