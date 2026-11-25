@@ -15,7 +15,7 @@ from .scenario_model import (
     Premissa,
     Scenario,
     Timing,
-    accusation_due,
+    accusation_beside_owner_due,
     arrive,
     crossing,
     entering,
@@ -28,6 +28,7 @@ from .scenario_model import (
 from .scenario_motion import Route, Waypoint, carried, sample_times
 from .scenario_premises import (
     depositor,
+    leaves_owner_reach,
     nearest_while_displaced,
     rests,
     stays_away,
@@ -138,7 +139,13 @@ def _seated_owner_and_stranger(
 
 
 def sit_beside_then_take(config: Config) -> Scenario:
-    """P1/furto: senta ao lado do dono até virar vínculo fraco, encosta e leva."""
+    """P1/furto: senta ao lado do dono até virar vínculo fraco, encosta e leva.
+
+    O dono fica sentado ao alcance da mala, e `carry_away` só começa a contar
+    depois que ela sai desse alcance: o prazo da acusação é o de
+    `Timing.accusation_beside_owner_tolerance_s`, com a distância inicial
+    mala-dono da cena, e a premissa `leaves_owner_reach` confere a geometria.
+    """
     tm, owner_id, stranger_id, bag_id = Timing(config), 1, 4, 101
     anchor = Point(0.0, 0.0)
     owner, stranger, bag_in, t_dep, t_sit, t_rise, spot = _seated_owner_and_stranger(config, tm)
@@ -172,6 +179,7 @@ def sit_beside_then_take(config: Config) -> Scenario:
                 f"encosta em {t_touch:.1f} s, leva em {t_take:.1f} s",
             ),
             nearest_while_displaced(scn, bag_id, stranger_id, anchor, (t_take, t_exit), cfg),
+            leaves_owner_reach(scn, bag_id, owner_id, (t_take, t_exit), WALK_SPEED_MS, cfg),
         )
 
     return Scenario(
@@ -193,7 +201,9 @@ def sit_beside_then_take(config: Config) -> Scenario:
                     tm.contact_tolerance_s,
                     "contato com bagagem alheia, mesmo com vínculo fraco",
                 ),
-                accusation_due(stranger_id, t_take, tm, WALK_SPEED_MS),
+                accusation_beside_owner_due(
+                    stranger_id, t_take, tm, spot.distance_to(anchor), WALK_SPEED_MS
+                ),
             ),
             silence=False,
         ),

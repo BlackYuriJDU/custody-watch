@@ -626,11 +626,11 @@ Oracle replays (boxes and IDs from annotation) do not validate a detector, compu
 
 ### Synthetic scenario benchmark
 
-`scripts/benchmark_scenarios.py` runs the custody logic on generated scenarios whose correct answer is known by construction (modules `src/custody_watch/scenario*.py`). It has 11 scenarios, each run at 3, 10 and 25 fps: 33 runs per system, without noise and without a seed. As of 2026-11-25 the system is right in 30 of 33 runs; a naive distance baseline is right in 24 of 33.
+`scripts/benchmark_scenarios.py` runs the custody logic on generated scenarios whose correct answer is known by construction (modules `src/custody_watch/scenario*.py`). It has 11 scenarios, each run at 3, 10 and 25 fps: 33 runs per system, without noise and without a seed. As of 2026-11-25 the system is right in 33 of 33 runs; a naive distance baseline is right in 24 of 33.
 
-This measures the logic on positions the generator produces. It does not demonstrate a detector, computed association or real video, and these counts are not a performance claim for real footage. The 3 errors are one scenario:
+This measures the logic on positions the generator produces. It does not demonstrate a detector, computed association or real video, and these counts are not a performance claim for real footage.
 
-- `sit_beside_then_take`: the system accuses, but outside the time tolerance.
+In `sit_beside_then_take` the owner sits within reach of the bag while it is taken. The removal rule keeps custody while a strong member of the owning party is within `owner_search_radius_m` of the bag's current position, so the accusation deadline for this scenario follows from that rule and the scene geometry: the time for the bag to leave the owner's reach and move one `moved_threshold_m` step, plus `carry_confirm_s`, plus two frames at the minimum frame rate (4.08 s with the default config). The other accusation deadlines are unchanged.
 
 The output JSON goes to `outputs/`, which is gitignored, so no result file is linked. To reproduce, from a checkout (the output path must be new; the script never overwrites):
 
