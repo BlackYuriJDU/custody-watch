@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,6 +13,7 @@ import cv2
 
 from .multicamera_media import FrameImages
 from .multicamera_view import ReplayView
+from .servidor import host_aceito, nomes_aceitos
 
 ASSETS = {
     "/": ("multicamera.html", "text/html; charset=utf-8"),
@@ -61,18 +63,44 @@ def _image_fields(query: str, config: dict) -> dict[str, str]:
 class ReplayServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, view: ReplayView, images: FrameImages, *, port: int = 8766):
+    def __init__(
+        self,
+        view: ReplayView,
+        images: FrameImages,
+        *,
+        port: int = 8766,
+        allowed_hosts: Iterable[str] = (),
+    ):
+        """`allowed_hosts`: nomes extras que o Host pode trazer, além dos desta máquina."""
         # Validar também o intervalo da interface antes de abrir a porta.
         self.config = view.config()
         self.view = view
         self.images = images
+        self._names = nomes_aceitos("127.0.0.1", allowed_hosts)
         super().__init__(("127.0.0.1", port), _Handler)
+
+    def accepts_host(self, authority: str | None) -> bool:
+        """Barra DNS rebinding: o navegador manda o nome do atacante no Host."""
+        return host_aceito(authority, self._names, porta=self.server_port, porta_padrao=80)
 
 
 class _Handler(BaseHTTPRequestHandler):
     server: ReplayServer
     # Prazo (s) só para ler o corpo de uma requisição recusada; não afeta as rotas GET.
     refusal_body_timeout = 2.0
+
+    def parse_request(self) -> bool:
+        """Ponto único, antes de qualquer rota e método: Host desta máquina ou 421."""
+        if not super().parse_request():
+            return False
+        hosts = self.headers.get_all("Host") or []
+        authority = hosts[0] if len(hosts) == 1 else None
+        if self.server.accepts_host(authority):
+            return True
+        self.close_connection = True
+        self._drain_refused_body()
+        self.send_error(HTTPStatus.MISDIRECTED_REQUEST, "Host nao permitido")
+        return False
 
     def _send(self, status: int, content_type: str, data: bytes):
         self.send_response(status)

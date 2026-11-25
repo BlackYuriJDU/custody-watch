@@ -42,7 +42,7 @@ def _ler_cabecalhos(sock: socket.socket) -> bytes:
 
 def _escrever_com_corpo(porta: int, metodo: str, corpo: bytes) -> bytes:
     cabecalho = (
-        f"{metodo} /api/contacts HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+        f"{metodo} /api/contacts HTTP/1.1\r\nHost: 127.0.0.1:{porta}\r\n"
         f"Content-Type: application/json\r\nContent-Length: {len(corpo)}\r\n\r\n"
     ).encode("ascii")
     with socket.create_connection(("127.0.0.1", porta), timeout=5) as sock:
@@ -72,7 +72,9 @@ def test_recusa_fecha_a_conexao_depois_de_responder(servidor):
 
 def test_corpo_anunciado_que_nunca_chega_nao_prende_a_thread(servidor, monkeypatch):
     monkeypatch.setattr(multicamera_server._Handler, "refusal_body_timeout", 0.3)
-    cabecalho = b"POST /api/contacts HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\n"
+    cabecalho = (
+        f"POST /api/contacts HTTP/1.1\r\nHost: 127.0.0.1:{servidor}\r\nContent-Length: 100\r\n\r\n"
+    ).encode("ascii")
     with socket.create_connection(("127.0.0.1", servidor), timeout=5) as sock:
         sock.sendall(cabecalho)
         inicio = time.monotonic()
@@ -83,11 +85,8 @@ def test_corpo_anunciado_que_nunca_chega_nao_prende_a_thread(servidor, monkeypat
 
 def test_content_length_invalido_ou_enorme_responde_sem_ler(servidor):
     for valor in (b"abc", b"-5", b"99999999999"):
-        cabecalho = (
-            b"POST /api/contacts HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: "
-            + valor
-            + b"\r\n\r\n"
-        )
+        inicio = f"POST /api/contacts HTTP/1.1\r\nHost: 127.0.0.1:{servidor}\r\n"
+        cabecalho = inicio.encode() + b"Content-Length: " + valor + b"\r\n\r\n"
         with socket.create_connection(("127.0.0.1", servidor), timeout=5) as sock:
             sock.sendall(cabecalho)
             resposta = _ler_cabecalhos(sock)
