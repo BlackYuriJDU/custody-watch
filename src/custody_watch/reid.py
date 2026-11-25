@@ -156,8 +156,9 @@ class Resolution:
     """O que o religador concluiu sobre um track.
 
     `settled` é falso enquanto não há amostras suficientes para um perfil
-    confiável. Antes disso o track existe, mas não deve receber posse de
-    bagagem — um perfil de um frame só é ruído.
+    confiável, ou até vencer `max_settle_s` desde a primeira amostra. Antes
+    disso o track existe, mas não deve receber posse de bagagem — um perfil
+    de um frame só é ruído.
     """
 
     canonical_id: int
@@ -214,13 +215,16 @@ class TrackLinker:
             return Resolution(canonical_id=track_id, settled=True)
 
         amostras = self._pending.setdefault(track_id, [])
-        self._pending_since.setdefault(track_id, t)
+        nasceu_em = self._pending_since.setdefault(track_id, t)
         amostras.append(appearance)
-        if len(amostras) < self._config.min_samples:
+        # `min_samples` conta quadros: a 25 fps são 0,36 s, a 3 fps são 3 s, e
+        # enquanto isso o track fica fora de `people`. O prazo em segundos
+        # limita essa espera independentemente da fonte (auditoria 2026-11-24).
+        if len(amostras) < self._config.min_samples and t - nasceu_em < self._config.max_settle_s:
             return Resolution(canonical_id=track_id, settled=False)
 
         perfil = average(amostras)
-        nasceu_em = self._pending_since.pop(track_id)
+        del self._pending_since[track_id]
         alvo, score, margem = self._match(track_id, nasceu_em, t, position, perfil)
         del self._pending[track_id]
 
