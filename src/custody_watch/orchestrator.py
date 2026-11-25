@@ -526,10 +526,17 @@ class _Session:
         regra P1 já diz que posse flui por vínculo forte, então um membro forte
         movendo a bagagem é custódia continuando, não terminando.
 
+        Membro forte ao alcance da posição ATUAL da bagagem basta, mesmo sem
+        ser o mais próximo: numa fila, o dono puxa a própria mala e quem vem
+        atrás fica mais perto dela. Enquanto ele a acompanha, acusar outro é
+        chute (P3). O dono que fica sentado enquanto a mala é levada deixa de
+        alcançá-la, e daí em diante decide-se como antes.
+
         Para todo o resto, o deslocamento precisa se sustentar por
         `carry_confirm_s` antes de valer. Um quadro só não é bagagem sendo
         levada — é ruído de projeção, e decidir nele é o mesmo defeito que o
-        caminho de desaparecimento já fechou.
+        caminho de desaparecimento já fechou. Confirmado, empate exato na
+        menor distância vira AMBIGUA: o escolhido sairia da ordem da lista.
         """
         if bag.state in TERMINAL_BAG_STATES or bag.state is BagState.AMBIGUA:
             # Custódia já decidida. Sem esta guarda, `flag_for_removal` roda a
@@ -544,46 +551,28 @@ class _Session:
             <= self.config.pipeline.owner_search_radius_m
         )
 
-        if perto:
-            party = None if bag.is_orphan else self.parties.get(bag.owner_party)
-            if party is not None and party.owns(carrier.track_id):
-                bag.moved_since = None
-                return False
+        if self._strong_owner_in_reach(bag, observation, people):
+            bag.moved_since = None
+            return False
 
         if bag.moved_since is None:
             bag.moved_since = self.t
         if self.t - bag.moved_since < self.config.custody.carry_confirm_s:
             return True
 
-        deslocamento = bag.anchor.distance_to(observation.position)
-
         if not perto:
             # Bagagem que anda sozinha é mais provavelmente artefato de
             # projeção que bagagem levitando. P3 manda suprimir o alerta — mas
             # em silêncio ninguém consegue reconstruir por que a bagagem
             # morreu, então o evento sai com os números que decidiram.
-            bag.state = BagState.AMBIGUA
-            self.events.emit(
-                Event(
-                    kind=EventKind.BAG_AMBIGUOUS,
-                    t_start=bag.moved_since,
-                    t_end=self.t,
-                    subject=None,
-                    bag=bag.bag_id,
-                    party=bag.owner_party,
-                    evidence={
-                        "moved_m": deslocamento,
-                        "nearest_person_m": (
-                            None
-                            if carrier is None
-                            else carrier.position.distance_to(observation.position)
-                        ),
-                        "anchor": [bag.anchor.x, bag.anchor.y],
-                        "candidate_people": [],
-                        "neighbour_bags": [],
-                    },
-                )
-            )
+            self._carry_ambiguous(bag, observation, carrier, set())
+            return True
+
+        empatados = self._tied_nearest(observation, people)
+        if len(empatados) > 1:
+            # Como no timeout de oclusão: mais de um candidato não tem como
+            # ser escolhido, e P3 manda suprimir em vez de chutar.
+            self._carry_ambiguous(bag, observation, carrier, empatados)
             return True
 
         resolve_removal(bag, carrier.track_id, self.parties, t=self.t, events=self.events)
@@ -591,6 +580,61 @@ class _Session:
         if flag is not None:
             self.flags.add(flag)
         return True
+
+    def _strong_owner_in_reach(
+        self, bag: Bag, observation: Observation, people: list[Observation]
+    ) -> bool:
+        """Algum membro FORTE do grupo dono alcança a posição atual da bagagem?
+
+        Vínculo fraco não conta -- P1: quem só sentou perto não legitima a
+        retirada, então também não a torna incerta.
+        """
+        party = None if bag.is_orphan else self.parties.get(bag.owner_party)
+        if party is None:
+            return False
+        raio = self.config.pipeline.owner_search_radius_m
+        return any(
+            party.owns(p.track_id) and p.position.distance_to(observation.position) <= raio
+            for p in people
+        )
+
+    @staticmethod
+    def _tied_nearest(observation: Observation, people: list[Observation]) -> set[int]:
+        """Quem empata exatamente na menor distância. Exige alguém em `people`."""
+        distancias = {p.track_id: p.position.distance_to(observation.position) for p in people}
+        menor = min(distancias.values())
+        return {tid for tid, d in distancias.items() if d == menor}
+
+    def _carry_ambiguous(
+        self,
+        bag: Bag,
+        observation: Observation,
+        carrier: Observation | None,
+        candidatos: set[int],
+    ) -> None:
+        """Marca AMBIGUA e diz por quê, com os números que decidiram."""
+        bag.state = BagState.AMBIGUA
+        self.events.emit(
+            Event(
+                kind=EventKind.BAG_AMBIGUOUS,
+                t_start=bag.moved_since,
+                t_end=self.t,
+                subject=None,
+                bag=bag.bag_id,
+                party=bag.owner_party,
+                evidence={
+                    "moved_m": bag.anchor.distance_to(observation.position),
+                    "nearest_person_m": (
+                        None
+                        if carrier is None
+                        else carrier.position.distance_to(observation.position)
+                    ),
+                    "anchor": [bag.anchor.x, bag.anchor.y],
+                    "candidate_people": sorted(candidatos),
+                    "neighbour_bags": [],
+                },
+            )
+        )
 
     def _remember_depositor(self, pendente: _Pendente, people: list[Observation]) -> None:
         """O primeiro que aparecer ao alcance responde pelo depósito.
