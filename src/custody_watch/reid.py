@@ -64,6 +64,7 @@ import cv2
 import numpy as np
 
 from .config import ReidConfig
+from .party import cobre, excede
 from .types import Point
 
 HUE_BINS = 12
@@ -220,7 +221,9 @@ class TrackLinker:
         # `min_samples` conta quadros: a 25 fps são 0,36 s, a 3 fps são 3 s, e
         # enquanto isso o track fica fora de `people`. O prazo em segundos
         # limita essa espera independentemente da fonte (auditoria 2026-11-24).
-        if len(amostras) < self._config.min_samples and t - nasceu_em < self._config.max_settle_s:
+        if len(amostras) < self._config.min_samples and not cobre(
+            t - nasceu_em, self._config.max_settle_s
+        ):
             return Resolution(canonical_id=track_id, settled=False)
 
         perfil = average(amostras)
@@ -275,7 +278,7 @@ class TrackLinker:
 
             gap = born_t - window.last_t
             # Guarda 1: tracks simultâneos são duas pessoas, por definição.
-            if gap <= 0.0 or gap > self._config.max_gap_s:
+            if gap <= 0.0 or excede(gap, self._config.max_gap_s):
                 continue
 
             # Guarda 3: reaparecer longe demais rápido demais não é a mesma pessoa.

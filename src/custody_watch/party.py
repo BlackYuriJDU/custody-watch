@@ -52,6 +52,25 @@ TIME_EPSILON_S = 1e-9
 WEAK_BOND_S = DEFAULT_PARTY.weak_bond_s
 
 
+def cobre(decorrido: float, janela: float) -> bool:
+    """`decorrido` já alcança `janela`? Com a folga de `TIME_EPSILON_S`:
+    instantes vêm de `quadro / fps`, e 26/3 - 20/3 dá 1,9999999999999991.
+
+    Para toda régua "decide quando o tempo vence o limiar": a decisão sai no
+    quadro que cobre o limiar, nunca um depois por arredondamento, e nunca
+    antes do limiar real por mais que a folga.
+    """
+    return decorrido >= janela - TIME_EPSILON_S
+
+
+def excede(decorrido: float, limite: float) -> bool:
+    """`decorrido` passa de `limite`, um prazo inclusivo ("até X s")? O
+    espelho de `cobre`: o quadro que fica exatamente no limite não é lido
+    como passado por arredondamento, e o prazo nunca se estende além do
+    real por mais que a folga."""
+    return decorrido > limite + TIME_EPSILON_S
+
+
 def _extent(track: Sequence[Observation]) -> float:
     """Extensão da trajetória: diagonal da caixa que contém todos os pontos.
 

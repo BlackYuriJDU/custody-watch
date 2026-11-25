@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from .config import CustodyConfig
 from .events import Event, EventKind, EventLog
-from .party import PartyManager
+from .party import PartyManager, cobre
 from .types import TERMINAL_BAG_STATES, Bag, BagState, Observation
 
 DEFAULT_CUSTODY = CustodyConfig()
@@ -78,7 +78,7 @@ def update_attendance(
         bag.unattended_since = None
     elif bag.unattended_since is None:
         bag.unattended_since = t
-    elif t - bag.unattended_since >= config.unattended_time_s:
+    elif cobre(t - bag.unattended_since, config.unattended_time_s):
         bag.state = BagState.DESACOMPANHADA
 
     if events is None or bag.state is previous_state:

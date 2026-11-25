@@ -67,7 +67,7 @@ from .custody import resolve_removal, update_attendance
 from .events import Event, EventKind, EventLog
 from .flags import FlagStore, flag_contact, flag_for_removal, flag_proximity
 from .ground_plane import GroundPlane
-from .party import TIME_EPSILON_S, PartyManager, is_comoving
+from .party import TIME_EPSILON_S, PartyManager, cobre, excede, is_comoving
 from .reid import TrackLinker
 from .terminal_bag_archive import TerminalBagArchive
 from .tracking import PlausibilityGate, TrackedDetection, anchor_vetoes, to_observations
@@ -179,12 +179,6 @@ def _centro(posicoes: list[Point]) -> Point:
     )
 
 
-def _cobre(decorrido: float, janela: float) -> bool:
-    """`decorrido` já alcança `janela`? Com a folga de `TIME_EPSILON_S`:
-    instantes vêm de `quadro / fps`, e 26/3 - 20/3 dá 1,9999999999999991."""
-    return decorrido >= janela - TIME_EPSILON_S
-
-
 def _nearest(people: Iterable[Observation], target) -> Observation | None:
     candidates = list(people)
     if not candidates:
@@ -239,7 +233,7 @@ class _Pendente:
         janela, como as demais réguas em segundos.
         """
         self.amostras.append((t, posicao))
-        cobrem = [i for i, (ti, _) in enumerate(self.amostras) if _cobre(t - ti, janela)]
+        cobrem = [i for i, (ti, _) in enumerate(self.amostras) if cobre(t - ti, janela)]
         inicio = cobrem[-1] if cobrem else 0
         self.amostras = self.amostras[inicio:]
 
@@ -265,7 +259,7 @@ class _Pendente:
         O corte efetivo é de velocidade: `v <= limiar/janela`, um quarto de
         metro por segundo com os defaults.
         """
-        if not self.amostras or not _cobre(self.amostras[-1][0] - self.amostras[0][0], janela):
+        if not self.amostras or not cobre(self.amostras[-1][0] - self.amostras[0][0], janela):
             return False
 
         meio = self.amostras[0][0] + janela / 2.0
@@ -393,7 +387,7 @@ class _Session:
         """
         if self.frames == 1:
             self.last_merge_t = self.t
-        if self.t - self.last_merge_t < self.config.pipeline.merge_every_s:
+        if not cobre(self.t - self.last_merge_t, self.config.pipeline.merge_every_s):
             return False
         self.last_merge_t = self.t
         return True
@@ -505,7 +499,7 @@ class _Session:
         """Proximidade estática prolongada. Não transfere posse — atenua o flag."""
         chave = (min(a.track_id, b.track_id), max(a.track_id, b.track_id))
         desde = self.together_since.setdefault(chave, self.t)
-        if self.t - desde < self.config.party.weak_bond_s:
+        if not cobre(self.t - desde, self.config.party.weak_bond_s):
             return
 
         if pa is not None and pb is None:
@@ -605,7 +599,7 @@ class _Session:
         em segundos e a falha repetida em quadros (`MIN_MISSING_FRAMES`)."""
         if ausencia.quadros < MIN_MISSING_FRAMES:
             return False
-        return ausencia.segundos >= self.config.pipeline.missing_before_occluded_s
+        return cobre(ausencia.segundos, self.config.pipeline.missing_before_occluded_s)
 
     def _confere_ancora(self, observation: Observation, known: Bag) -> Bag | None:
         """Regra P2 para track já conhecido: a posição desmente o id?
@@ -665,7 +659,7 @@ class _Session:
         if bag.occluded_since is None:
             return
 
-        if self.t - bag.occluded_since >= self.config.custody.min_occlusion_report_s:
+        if cobre(self.t - bag.occluded_since, self.config.custody.min_occlusion_report_s):
             self.events.emit(
                 Event(
                     kind=EventKind.BAG_OCCLUDED,
@@ -726,7 +720,7 @@ class _Session:
 
         if bag.moved_since is None:
             bag.moved_since = self.t
-        if self.t - bag.moved_since < self.config.custody.carry_confirm_s:
+        if not cobre(self.t - bag.moved_since, self.config.custody.carry_confirm_s):
             return True
 
         if not perto:
@@ -940,7 +934,7 @@ class _Session:
             return
         if not bag.is_orphan:
             return
-        if self.t - bag.anchored_at > self.config.custody.ownership_window_s:
+        if excede(self.t - bag.anchored_at, self.config.custody.ownership_window_s):
             return
 
         carrier = _nearest(people, bag.anchor)
@@ -1057,7 +1051,7 @@ class _Session:
                 desde = self.near_since.setdefault(chave, self.t)
                 decorrido = self.t - desde
                 if (
-                    decorrido >= self.config.pipeline.proximity_flag_s
+                    cobre(decorrido, self.config.pipeline.proximity_flag_s)
                     and chave not in self.proximity_flagged
                 ):
                     self.proximity_flagged.add(chave)
@@ -1107,7 +1101,7 @@ class _Session:
                 <= self.config.pipeline.owner_search_radius_m
             )
 
-            if self.t - bag.occluded_since < self.config.custody.max_occlusion_s:
+            if not cobre(self.t - bag.occluded_since, self.config.custody.max_occlusion_s):
                 continue
 
             self.resolve_occlusion_timeout(bag)
