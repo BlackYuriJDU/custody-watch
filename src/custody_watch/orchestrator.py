@@ -723,13 +723,14 @@ class _Session:
         """
         if bag.owner_party is None:
             return
+        # Só vínculo forte é dono (P1). Membro fraco segue estranho a ela.
         for pessoa in self.flags.people():
-            if self.parties.party_of(pessoa) == bag.owner_party:
+            if self.parties.owns(bag.owner_party, pessoa):
                 self.flags.drop(pessoa, bag.bag_id)
         self.contact_flagged = {
             (pessoa, bagagem)
             for pessoa, bagagem in self.contact_flagged
-            if bagagem != bag.bag_id or self.parties.party_of(pessoa) != bag.owner_party
+            if bagagem != bag.bag_id or not self.parties.owns(bag.owner_party, pessoa)
         }
 
     def observe_bags(self, bags: list[Observation], people: list[Observation]) -> set[int]:
@@ -773,10 +774,8 @@ class _Session:
                 continue
 
             for person in people:
-                if (
-                    bag.owner_party is not None
-                    and self.parties.party_of(person.track_id) == bag.owner_party
-                ):
+                # Só vínculo forte isenta (P1): o fraco atenua, nunca apaga.
+                if self.parties.owns(bag.owner_party, person.track_id):
                     continue
 
                 chave = (person.track_id, bag.bag_id)

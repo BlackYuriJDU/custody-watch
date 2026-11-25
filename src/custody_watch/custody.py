@@ -32,9 +32,10 @@ def update_attendance(
 ) -> Bag:
     """ACOMPANHADA <-> DESACOMPANHADA conforme a distância do grupo dono.
 
-    Qualquer membro do grupo serve: a posse pertence ao grupo, não ao
-    indivíduo. Bagagem órfã não acumula tempo — não há dono cuja ausência
-    signifique alguma coisa.
+    Qualquer membro de vínculo forte serve: a posse pertence ao grupo, não ao
+    indivíduo. Membro fraco não conta (P1) -- senão quem só sentou perto
+    manteria a mala "acompanhada" depois que o dono sai. Bagagem órfã não
+    acumula tempo — não há dono cuja ausência signifique alguma coisa.
 
     Roda a cada frame, mas só emite na TRANSIÇÃO de estado: emitir toda vez
     que a bagagem *está* desacompanhada afogaria o log num vídeo longo.
@@ -57,7 +58,7 @@ def update_attendance(
     distancias = [
         p.position.distance_to(bag.anchor)
         for p in people
-        if party_manager.party_of(p.track_id) == bag.owner_party
+        if party_manager.owns(bag.owner_party, p.track_id)
     ]
     mais_proximo = min(distancias) if distancias else None
 
