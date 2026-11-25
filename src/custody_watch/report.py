@@ -211,11 +211,11 @@ def _render_report(
 
     return f"""<meta charset="utf-8">
 <title>{html.escape(titulo)}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 :root {{
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
   --ground: #F1F3F5;
   --surface: #FFFFFF;
   --raised: #E8ECEF;
@@ -263,7 +263,7 @@ body {{
   margin: 0;
   background: var(--ground);
   color: var(--ink);
-  font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  font-family: var(--sans);
   font-size: 16px;
   line-height: 1.6;
 }}
@@ -278,7 +278,7 @@ body {{
 }}
 
 h1, h2 {{
-  font-family: "Barlow Condensed", "IBM Plex Sans", sans-serif;
+  font-family: var(--display);
   font-weight: 600;
   letter-spacing: 0.01em;
   text-wrap: balance;
@@ -288,7 +288,7 @@ h1 {{ font-size: clamp(2.4rem, 6vw, 3.6rem); line-height: 1.05; }}
 h2 {{ font-size: 1.6rem; line-height: 1.15; }}
 
 .eyebrow {{
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--mono);
   font-size: 0.74rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -328,7 +328,7 @@ h2 {{ font-size: 1.6rem; line-height: 1.15; }}
 }}
 .placar div:last-child {{ border-right: none; }}
 .placar dt {{
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--mono);
   font-size: 0.7rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -336,7 +336,7 @@ h2 {{ font-size: 1.6rem; line-height: 1.15; }}
 }}
 .placar dd {{
   margin: 0.3rem 0 0;
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: var(--display);
   font-size: 2rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -353,7 +353,7 @@ h2 {{ font-size: 1.6rem; line-height: 1.15; }}
   border-bottom: 2px solid var(--hairline);
 }}
 .meta, .janela {{
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -364,7 +364,7 @@ h2 {{ font-size: 1.6rem; line-height: 1.15; }}
   flex-wrap: wrap;
   gap: 0.4rem 1.6rem;
   margin: 0;
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--mono);
   font-size: 0.78rem;
 }}
 .eventos div {{ display: flex; gap: 0.4rem; }}
@@ -386,7 +386,7 @@ h2 {{ font-size: 1.6rem; line-height: 1.15; }}
 
 .ordem {{ display: flex; justify-content: center; }}
 .rank {{
-  font-family: "Barlow Condensed", sans-serif;
+  font-family: var(--display);
   font-size: 1.9rem;
   font-weight: 600;
   color: var(--accent);
@@ -414,7 +414,7 @@ h2 {{ font-size: 1.6rem; line-height: 1.15; }}
 
 /* Severidade lida em FORMA antes de cor: preenchido, contornado, texto. */
 .chip {{
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--mono);
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -448,7 +448,7 @@ h2 {{ font-size: 1.6rem; line-height: 1.15; }}
   margin: 0;
   padding-top: 0.7rem;
   border-top: 1px solid var(--hairline);
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--mono);
   font-size: 0.76rem;
 }}
 .evidencia div {{ display: flex; gap: 0.4rem; }}
