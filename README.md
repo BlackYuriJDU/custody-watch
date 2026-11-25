@@ -4,7 +4,7 @@
 
 custody-watch is research software that ranks luggage custody changes in airport surveillance video for a human operator to review — not faces, not "suspicious people".
 
-> **Status:** runs end to end, from an `.mp4` to a ranked review page for a human operator. Local CPU verification on Windows (2026-11-25): `pytest` 1405 passed, 1 skipped; Node tests 88/88. Not verified on GPU or on a physical camera.
+> **Status:** runs end to end, from an `.mp4` to a ranked review page for a human operator. Local CPU verification on Windows (2026-11-25): `pytest` 1700 passed, 1 skipped; Node tests 91/91. Not verified on GPU or on a physical camera.
 >
 > **On a generated theft, it found the thief.** A 40-second gate-area theft made with Veo: the thief is the only top-severity item in the queue, with the right bag and the right owner group. See [The first footage that is not a dataset](EVALUATION_HISTORY.md#the-first-footage-that-is-not-a-dataset).
 >
@@ -642,7 +642,7 @@ The output JSON goes to `outputs/`, which is gitignored, so no result file is li
 
 ## Stack
 
-Python 3.12 · [uv](https://docs.astral.sh/uv/) · YOLO26 behind a swappable `Detector` interface · OpenCV · Pillow
+Python ≥3.11 · [uv](https://docs.astral.sh/uv/) · YOLO26 behind a swappable `Detector` interface · OpenCV · Pillow
 
 ## Licence
 
