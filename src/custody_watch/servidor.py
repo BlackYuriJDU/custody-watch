@@ -192,6 +192,9 @@ class _Atendente(BaseHTTPRequestHandler):
         painel = self.server.painel
         if rota == "/":
             self._envia(200, "text/html; charset=utf-8", PAGINA.encode("utf-8"))
+        elif rota == "/healthz":
+            # Só diz que o processo atende: sem estado da fonte, vídeo ou pessoas.
+            self._envia(200, "application/json; charset=utf-8", b'{"status":"ok"}')
         elif rota == "/estado":
             corpo = json.dumps(painel.estado(), ensure_ascii=False).encode("utf-8")
             self._envia(200, "application/json; charset=utf-8", corpo)

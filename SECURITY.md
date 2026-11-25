@@ -36,11 +36,28 @@ This describes what the code does today, not a hardening guarantee.
   not identify clients (no client certificates are requested). Anyone who can
   reach the port can watch the annotated video, read `/estado`, and send the
   two POST routes (`/ancora`, `/dono`) that add operator pointing to the live
-  session. No Origin or CORS handling is implemented. Do not expose this
-  server to a network without an authenticating reverse proxy or equivalent.
-- POST bodies are limited to 4096 bytes and must be a JSON object; click
-  coordinates must be fractions in [0, 1]. Video is capped at 15 frames per
-  second per tab. Beyond these, no request-rate limit exists.
+  session. Do not expose this server to a network without an authenticating
+  reverse proxy or equivalent.
+- Browser-origin checks (not authentication): a request carrying an `Origin`
+  header is answered `403` unless it has the same scheme, host and port as the
+  accepted `Host`, and a repeated `Origin` is also `403`. The check runs on every
+  method, before routing. A request without `Origin` (a client outside a
+  browser) passes it. No CORS headers (`Access-Control-*`) are ever sent, so
+  other origins cannot read responses cross-origin.
+- POST routes answer `415` unless `Content-Type` is `application/json`
+  (parameters such as `charset` are ignored), which forces a browser
+  preflight on cross-origin requests. Bodies are limited to 4096 bytes and must
+  be a JSON object (`400` otherwise); `NaN`, `Infinity` and floats that
+  overflow to infinity are rejected (`400`), as is JSON nested deeper than the
+  parser allows. Click coordinates must be fractions in [0, 1]. Every socket
+  read or write has a 10 s deadline; a body that does not arrive in time
+  gets `408`. Video is capped at 15 frames per second per tab. Beyond these,
+  no request-rate limit exists.
+- `GET /healthz` returns `200` with the fixed body `{"status":"ok"}` and
+  `Cache-Control: no-store`. It reports only that the process answers: no
+  video, people, bags, configuration or source state. It passes the same `Host`
+  and `Origin` checks as every other route (`421` for a foreign `Host`) and has
+  no write form.
 
 **Multicamera replay laboratory** (`scripts/serve_multicamera.py`,
 `src/custody_watch/multicamera_server.py`):
@@ -52,7 +69,11 @@ This describes what the code does today, not a hardening guarantee.
   `--allowed-host NAME` on its own port are accepted. This blocks DNS
   rebinding; it is not authentication.
 - Serves fixed assets and read-only GET/HEAD routes; query parameters must match
-  an exact expected set. Responses carry `nosniff`, `no-referrer` and a
+  an exact expected set (`400` otherwise). POST, PUT, PATCH and DELETE are
+  refused with `501` and are never read beyond a small drained body. It does no
+  `Origin` or CORS handling; the `Host` check is its only browser-facing
+  defence. `GET /healthz` returns `200` with `{"status":"ok"}` and no query
+  string, exposing nothing else. Responses carry `nosniff`, `no-referrer` and a
   `default-src 'self'` Content-Security-Policy.
 
 Out of scope: the security of the machine running the software, of the video

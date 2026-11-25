@@ -132,6 +132,9 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(
                     200, content_type, (Path(__file__).parent / "assets" / filename).read_bytes()
                 )
+            elif route.path == "/healthz":
+                _query(route.query, set())
+                self._json(200, {"status": "ok"})
             elif route.path == "/api/config":
                 _query(route.query, set())
                 self._json(200, self.server.config)
