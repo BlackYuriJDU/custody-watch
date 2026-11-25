@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -25,6 +26,9 @@ ASSETS = {
     "/assets/review_queue.js": ("review_queue.js", "text/javascript; charset=utf-8"),
     "/assets/review_queue_ui.js": ("review_queue_ui.js", "text/javascript; charset=utf-8"),
 }
+
+# Teto do corpo descartado numa recusa de escrita; acima disso responde e fecha sem ler.
+REFUSED_BODY_DRAIN_LIMIT = 256 * 1024
 
 
 def _query(query: str, fields: set[str]) -> dict[str, str]:
@@ -67,6 +71,8 @@ class ReplayServer(ThreadingHTTPServer):
 
 class _Handler(BaseHTTPRequestHandler):
     server: ReplayServer
+    # Prazo (s) só para ler o corpo de uma requisição recusada; não afeta as rotas GET.
+    refusal_body_timeout = 2.0
 
     def _send(self, status: int, content_type: str, data: bytes):
         self.send_response(status)
@@ -122,6 +128,34 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         self.do_GET()
+
+    def _refuse_write(self):
+        """Recusa escrita (501) sem aceitá-la, drenando um corpo pequeno antes de responder."""
+        self.close_connection = True
+        self._drain_refused_body()
+        self.send_error(HTTPStatus.NOT_IMPLEMENTED, "Servidor somente leitura")
+
+    def _drain_refused_body(self):
+        # Fechar o socket com bytes não lidos faz o Windows enviar RST, e o cliente pode
+        # perder a resposta de recusa. Corpo inválido, grande demais ou que não chega no
+        # prazo é descartado sem leitura adicional: a resposta sai e a conexão fecha.
+        announced = self.headers.get("Content-Length", "0").strip()
+        if not (announced.isascii() and announced.isdigit()):
+            return
+        remaining = int(announced)
+        if remaining > REFUSED_BODY_DRAIN_LIMIT:
+            return
+        try:
+            self.connection.settimeout(self.refusal_body_timeout)
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 8192))
+                if not chunk:
+                    return
+                remaining -= len(chunk)
+        except OSError:
+            return  # inclui TimeoutError: corpo anunciado que não chega
+
+    do_POST = do_PUT = do_PATCH = do_DELETE = _refuse_write
 
     def log_message(self, *_args):
         # Não registrar query strings ou caminhos das fontes na saída HTTP.
