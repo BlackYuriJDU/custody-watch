@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import math
 import socket
 import ssl
 import threading
+from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -48,9 +50,129 @@ CORPO_MAX = 4096
 engano ou abuso, e ler o que o cliente mandar é como se enche a memória de um
 processo que roda por dias."""
 
+LEITURA_S = 10.0
+"""Prazo de cada leitura ou escrita no socket de uma conexão. Sem ele, um
+cliente que anuncia `Content-Length` maior que o corpo -- ou que conecta e
+não manda nada -- segura a thread dele para sempre."""
+
+NOMES_LOCAIS = frozenset({"localhost", "127.0.0.1", "::1"})
+CURINGAS = frozenset({"", "0.0.0.0", "::"})
+"""Endereços de escuta que não são nome de ninguém: o navegador nunca os manda
+como Host, e quem abre a tela usa o IP da máquina."""
+
+TIPO_JSON = "application/json"
+
+
+def nomes_aceitos(host: str, extras: Iterable[str]) -> frozenset[str]:
+    """Os nomes que o Host de um pedido pode trazer, em minúsculas e sem
+    colchetes: os desta máquina, o de escuta quando é de rede e os declarados
+    por quem sobe a tela."""
+    nomes = set(NOMES_LOCAIS)
+    for nome in (host, *extras):
+        nome = nome.strip("[]").lower()
+        if nome not in CURINGAS:
+            nomes.add(nome)
+    return frozenset(nomes)
+
+
+def _host_e_porta(autoridade: str, porta_padrao: int) -> tuple[str, int] | None:
+    """`exemplo:8080` vira `("exemplo", 8080)`; porta ausente é a do esquema.
+    Qualquer coisa além de host e porta -- usuário, caminho -- não é Host."""
+    try:  # colchete sem par e porta não numérica são ValueError
+        partes = urlsplit("//" + autoridade)
+        porta = partes.port
+    except ValueError:
+        return None
+    if "@" in autoridade or partes.netloc != autoridade or not partes.hostname:
+        return None
+    return partes.hostname, porta if porta is not None else porta_padrao
+
+
+def _ip_literal(nome: str) -> bool:
+    try:
+        ipaddress.ip_address(nome)
+    except ValueError:
+        return False
+    return True
+
+
+def host_aceito(
+    autoridade: str | None,
+    nomes: frozenset[str],
+    *,
+    porta: int,
+    porta_padrao: int,
+    qualquer_ip: bool = False,
+) -> bool:
+    """O Host aponta para esta tela? Barra DNS rebinding: o domínio do atacante
+    pode resolver para cá, mas o navegador manda o nome dele no Host.
+
+    `qualquer_ip` vale para escuta em curinga: IP literal não passa por DNS,
+    então não serve a rebinding, e o IP da máquina não se sabe de antemão.
+    """
+    endereco = _host_e_porta(autoridade or "", porta_padrao)
+    if endereco is None or endereco[1] != porta:
+        return False
+    nome = endereco[0]
+    return nome in nomes or (qualquer_ip and _ip_literal(nome))
+
+
+def _recusa_constante(nome: str) -> float:
+    raise ValueError(f"{nome} não é um número aceito")
+
+
+def _float_finito(texto: str) -> float:
+    valor = float(texto)
+    if not math.isfinite(valor):
+        raise ValueError(f"número fora do intervalo: {texto[:40]}")
+    return valor
+
 
 class _Atendente(BaseHTTPRequestHandler):
     server: Servidor
+
+    def setup(self) -> None:
+        self.timeout = self.server.prazo_leitura_s
+        self.raw_requestline = b""
+        super().setup()
+
+    def log_error(self, format: str, *args: object) -> None:
+        """Calado só no prazo de uma conexão que nunca mandou pedido: o
+        navegador abre conexões especulativas e não as usa, e cada uma viraria
+        uma linha no terminal. Qualquer outro erro continua saindo."""
+        estourou_prazo = bool(args) and isinstance(args[0], TimeoutError)
+        if estourou_prazo and not self.raw_requestline:
+            return
+        super().log_error(format, *args)
+
+    def parse_request(self) -> bool:
+        """Ponto único, antes de qualquer rota e de qualquer método: Host e
+        Origin desta tela, ou recusa antes de rotear ou usar o corpo."""
+        if not super().parse_request():
+            return False
+        hosts = self.headers.get_all("Host") or []
+        autoridade = hosts[0] if len(hosts) == 1 else None
+        if not self.server.aceita_host(autoridade):
+            self._recusa_sem_ler(421, "Host não permitido: abra a tela pelo endereço do servidor")
+            return False
+        origens = self.headers.get_all("Origin") or []
+        if len(origens) > 1 or (origens and not self.server.aceita_origem(origens[0], autoridade)):
+            self._recusa_sem_ler(403, "origem não permitida: só a própria tela faz este pedido")
+            return False
+        return True
+
+    def _recusa_sem_ler(self, codigo: int, motivo: str) -> None:
+        """Recusa e fecha a conexão antes de usar o corpo. O corpo pequeno é
+        lido e descartado: no Windows, fechar com bytes não lidos no socket
+        vira RST, e o cliente perde a resposta de recusa."""
+        self.close_connection = True
+        try:
+            tamanho = int(self.headers.get("Content-Length") or 0)
+            if 0 < tamanho <= CORPO_MAX:
+                self.rfile.read(tamanho)
+        except (ValueError, OSError):  # OSError inclui o prazo de leitura
+            pass
+        self._recusa(codigo, motivo)
 
     def do_GET(self) -> None:
         rota = urlsplit(self.path).path
@@ -83,9 +205,19 @@ class _Atendente(BaseHTTPRequestHandler):
         if rota not in ("/ancora", "/dono"):
             self._envia(404, "text/plain; charset=utf-8", "não existe".encode())
             return
+        # JSON obriga o navegador a perguntar antes (preflight) em pedido de
+        # outra origem; `text/plain` e formulário passariam direto.
+        tipo = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if tipo != TIPO_JSON:
+            self._recusa_sem_ler(415, f"corpo precisa ser {TIPO_JSON}")
+            return
 
         try:
             pedido = self._corpo()
+        except TimeoutError:
+            self.close_connection = True
+            self._recusa(408, "corpo incompleto: prazo de leitura esgotado")
+            return
         except (ValueError, TypeError) as erro:
             self._recusa(400, str(erro) or "pedido inválido")
             return
@@ -119,7 +251,8 @@ class _Atendente(BaseHTTPRequestHandler):
                 bagagem = sessao.aponta_bagagem(px, py)
             else:
                 bagagem = sessao.aponta_dono(int(pedido["bagagem"]), px, py)
-        except (ValueError, KeyError, TypeError) as erro:
+        except (ValueError, KeyError, TypeError, OverflowError) as erro:
+            # OverflowError: inteiro do JSON grande demais para virar float.
             self._recusa(400, str(erro) or "pedido inválido")
             return
 
@@ -130,7 +263,13 @@ class _Atendente(BaseHTTPRequestHandler):
         tamanho = int(self.headers.get("Content-Length") or 0)
         if tamanho <= 0 or tamanho > CORPO_MAX:
             raise ValueError(f"corpo de {tamanho} bytes; o teto é {CORPO_MAX}")
-        pedido = json.loads(self.rfile.read(tamanho))
+        dados = self.rfile.read(tamanho)
+        try:
+            # Infinity, NaN e 1e999 não são coordenada nem id de bagagem.
+            pedido = json.loads(dados, parse_constant=_recusa_constante, parse_float=_float_finito)
+        except RecursionError:
+            # "[" * 4000 cabe no teto de bytes e estoura a pilha do parser.
+            raise ValueError("JSON aninhado demais") from None
         if not isinstance(pedido, dict):
             raise ValueError("esperado um objeto JSON")
         return pedido
@@ -177,8 +316,8 @@ class _Atendente(BaseHTTPRequestHandler):
                     ultimo, ultimo_envio = jpeg, relogio
                 encerrando.wait(1.0 / QUADROS_POR_SEGUNDO_MAX)
                 relogio += 1.0 / QUADROS_POR_SEGUNDO_MAX
-        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
-            return  # a aba fechou
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError):
+            return  # a aba fechou, ou parou de ler além do prazo
 
     def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
         """Silencioso no caminho feliz: a página pede o estado duas vezes por
@@ -216,6 +355,7 @@ def _ponto(pedido: dict, tamanho: tuple[float, float]) -> tuple[float, float]:
 
 class Servidor(ThreadingHTTPServer):
     daemon_threads = True
+    prazo_leitura_s: float = LEITURA_S
 
     def __init__(
         self,
@@ -224,7 +364,10 @@ class Servidor(ThreadingHTTPServer):
         porta: int = PORTA_PADRAO,
         tls: ssl.SSLContext | None = None,
         sessao: LiveSession | None = None,
+        nomes_permitidos: Iterable[str] = (),
     ) -> None:
+        """`nomes_permitidos`: nomes de rede extras que o Host pode trazer,
+        além dos desta máquina e do endereço de escuta."""
         if tls is None and not so_nesta_maquina(host):
             raise ValueError(
                 f"recusado escutar em {host} sem TLS: na rede, HTTP em claro deixa "
@@ -239,6 +382,8 @@ class Servidor(ThreadingHTTPServer):
         self.encerrando = threading.Event()
         self._no_ar = threading.Event()
         self._tls = tls
+        self._nomes = nomes_aceitos(host, nomes_permitidos)
+        self._curinga = host.strip("[]") in CURINGAS
         if ":" in host:
             self.address_family = socket.AF_INET6
         super().__init__((host, porta), _Atendente)
@@ -257,6 +402,36 @@ class Servidor(ThreadingHTTPServer):
     @property
     def cifrado(self) -> bool:
         return self._tls is not None
+
+    @property
+    def _esquema(self) -> str:
+        return "https" if self.cifrado else "http"
+
+    @property
+    def _porta_padrao(self) -> int:
+        return 443 if self.cifrado else 80
+
+    def aceita_host(self, autoridade: str | None) -> bool:
+        return host_aceito(
+            autoridade,
+            self._nomes,
+            porta=self.porta,
+            porta_padrao=self._porta_padrao,
+            qualquer_ip=self._curinga,
+        )
+
+    def aceita_origem(self, origem: str, autoridade: str | None) -> bool:
+        """Origin presente tem de ser esta tela: mesmo esquema, host e porta
+        do Host já aceito. Barra o POST que outra página aberta no navegador
+        do operador faria para cá. Sem Origin é cliente fora do navegador."""
+        try:
+            partes = urlsplit(origem)
+        except ValueError:
+            return False
+        if partes.scheme != self._esquema or origem != f"{partes.scheme}://{partes.netloc}":
+            return False
+        aqui = _host_e_porta(autoridade or "", self._porta_padrao)
+        return aqui is not None and _host_e_porta(partes.netloc, self._porta_padrao) == aqui
 
     def finish_request(self, request: socket.socket, client_address: tuple) -> None:
         """Com TLS, o aperto de mão acontece aqui, na thread da conexão.
