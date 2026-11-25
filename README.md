@@ -8,6 +8,13 @@ Detecting **luggage custody changes** in airport surveillance video — not face
 >
 > **On real staged thefts, it missed all four.** MEVA has four annotated bag thefts on real cameras, and the detector never saw any of the four bags at rest — so no custody ever existed to lose. False accusations on the same footage went to zero. See [Real footage](#real-footage-meva-and-ucf-crime).
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/camera-wall-dark.jpg">
+  <img src="assets/screenshots/camera-wall-light.jpg" alt="Multi-camera replay lab: two synthetic cameras side by side with a person and a bag outlined, a synchronized timeline above, and a floor plan on the right.">
+</picture>
+
+*The multi-camera replay lab on the synthetic two-camera fixture — no weights, video or GPU. Boxes come from the fixture, not from a detector.*
+
 ## What this is
 
 Luggage theft in airport waiting areas is not an identity problem. It is an **object custody** problem. The question is not *"who is this person"* — it is:
