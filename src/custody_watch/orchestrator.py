@@ -694,7 +694,12 @@ class _Session:
         A janela é o que impede a retentativa de reabrir o ataque que a regra
         P1 fecha: passado o prazo desde o depósito, quem se aproxima de uma
         bagagem sem dono não herda a posse dela.
+
+        Custódia encerrada não é pergunta em aberto: a órfã levada e devolvida
+        ao lugar dentro da janela iria para quem a levou.
         """
+        if bag.state in TERMINAL_BAG_STATES:
+            return
         if not bag.is_orphan:
             return
         if self.t - bag.anchored_at > self.config.custody.ownership_window_s:
@@ -720,8 +725,12 @@ class _Session:
         aponta a bagagem primeiro e o dono depois. Medido no MEVA com a tela
         ao vivo: a dona da bolsa apontada entrou na fila em primeiro lugar,
         por tocar na própria bolsa nos segundos entre os dois cliques.
+
+        Custódia encerrada fica como foi decidida: o N3 descreve quem levou a
+        bagagem naquele instante (P4), e posse que chega depois -- por
+        `claim_ownership` com a bagagem devolvida ao lugar -- não o desfaz.
         """
-        if bag.owner_party is None:
+        if bag.owner_party is None or bag.state in TERMINAL_BAG_STATES:
             return
         # Só vínculo forte é dono (P1). Membro fraco segue estranho a ela.
         for pessoa in self.flags.people():
@@ -1056,6 +1065,13 @@ class LiveSession:
                 raise ValueError(f"bagagem {bag_id} não existe")
             if s.registry.is_archived(bag_id):
                 raise ValueError("custódia arquivada é somente leitura")
+            if bag.state in TERMINAL_BAG_STATES:
+                # Com ou sem arquivo terminal: dono apontado depois da retirada
+                # apagaria o N3 de quem a levou em `esquece_contatos_do_dono`.
+                raise ValueError(
+                    f"custódia da bagagem {bag_id} já está encerrada "
+                    f"({bag.state.name}); não aceita outro dono"
+                )
 
             dono = _quem_esta_em(self._ultimo_tracked, px, py)
             if dono is None:
