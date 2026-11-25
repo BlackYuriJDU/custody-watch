@@ -433,8 +433,8 @@ class _Session:
             return None
 
         if len(candidatas) > 1:
-            self.registry.mark_ambiguous_neighbours(
-                candidatas[0].bag_id, t=self.t, events=self.events
+            self.registry.mark_ambiguous_candidates(
+                [bag.bag_id for bag in candidatas], t=self.t, events=self.events
             )
             return AMBIGUOUS
 
