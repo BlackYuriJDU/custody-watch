@@ -240,6 +240,15 @@ class PartyManager:
     def party_of(self, track_id: int) -> int | None:
         return self._party_of.get(track_id)
 
+    def owns(self, party_id: int | None, track_id: int) -> bool:
+        """Regra P1: `track_id` tem vínculo forte com `party_id`.
+
+        Não use `party_of(track) == party_id` para perguntar "é dono": isso
+        também vale para vínculo fraco, que só atenua o flag e nunca o apaga.
+        """
+        party = self._parties.get(party_id) if party_id is not None else None
+        return party is not None and party.owns(track_id)
+
     def form_on_arrival(
         self,
         track_ids: Sequence[int],
