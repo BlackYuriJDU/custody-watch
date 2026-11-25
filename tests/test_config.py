@@ -226,21 +226,24 @@ def test_erro_de_max_occlusion_nomeia_o_ataque(tmp_path):
     assert SAFE_BOUNDS["custody.max_occlusion_s"].reason in str(erro.value)
 
 
-def test_missing_frames_tem_faixa_segura(tmp_path):
+def test_limiar_de_oclusao_tem_faixa_segura(tmp_path):
     """A 5 quadros esse limiar disparava um N3 falso contra quem passava na
-    frente da bagagem. Limiar relevante a ataque precisa de faixa declarada."""
+    frente da bagagem. Limiar relevante a ataque precisa de faixa declarada.
+
+    Em segundos desde `test_oclusao_fps.py`: os extremos são os de antes, 1 e
+    200 quadros, lidos a 25 fps."""
     caminho = tmp_path / "c.json"
 
     caminho.write_text(
-        json.dumps({"pipeline": {"missing_frames_before_occluded": 1}}), encoding="utf-8"
+        json.dumps({"pipeline": {"missing_before_occluded_s": 0.04}}), encoding="utf-8"
     )
-    with pytest.raises(UnsafeValueError, match="missing_frames_before_occluded"):
+    with pytest.raises(UnsafeValueError, match="missing_before_occluded_s"):
         load_config(caminho)
 
     caminho.write_text(
-        json.dumps({"pipeline": {"missing_frames_before_occluded": 200}}), encoding="utf-8"
+        json.dumps({"pipeline": {"missing_before_occluded_s": 8.0}}), encoding="utf-8"
     )
-    with pytest.raises(UnsafeValueError, match="missing_frames_before_occluded"):
+    with pytest.raises(UnsafeValueError, match="missing_before_occluded_s"):
         load_config(caminho)
 
 

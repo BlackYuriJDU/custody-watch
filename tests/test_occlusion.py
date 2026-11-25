@@ -196,8 +196,8 @@ def test_bagagem_readotada_fica_estavel_ate_o_fim_do_video():
     procurado), então cada frame a conta de `missing` para 900 estoura de
     novo, abre uma oclusão, e o próprio `observe_bags` fecha essa oclusão no
     frame seguinte (porque `get_by_track(901)` resolve para o bag 900 já
-    religado) — um ciclo de abre-fecha a cada `missing_frames_before_occluded`
-    quadros, pelo resto do vídeo. Estendendo a cena para 80s (bem além de
+    religado) — um ciclo de abre-fecha a cada `missing_before_occluded_s`,
+    pelo resto do vídeo. Estendendo a cena para 80s (bem além de
     `max_occlusion_s`) para dar tempo do ciclo se manifestar.
 
     Sem piso de registro de propósito: o ciclo que este teste vigia produz

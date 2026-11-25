@@ -36,9 +36,9 @@ PLANO = GroundPlane(np.diag([0.01, 0.01, 1.0]))
 DONO_A, DONO_B = 1, 2
 MALA_A, MALA_B = 101, 102
 
-# As malas assentam (rest_confirm_s) e somem aos 3s; voltam aos 5s, com 50
-# quadros de ausência -- bem acima de `missing_frames_before_occluded`. Os
-# donos levam cada um a sua aos 7s e andam para fora até o fim.
+# As malas assentam (rest_confirm_s) e somem aos 3s; voltam aos 5s, com 2s de
+# ausência -- bem acima de `missing_before_occluded_s`. Os donos levam cada
+# um a sua aos 7s e andam para fora até o fim.
 SOMEM_EM = 3.0
 VOLTAM_EM = 5.0
 LEVAM_EM = 7.0
@@ -157,10 +157,10 @@ def test_premissa_das_gemeas_ambiguas():
 
 
 def test_premissa_da_ausencia_e_dos_donos():
-    """A ausência passa de `missing_frames_before_occluded` quadros, e cada
-    dono fica longe da mala do outro e do outro dono."""
-    quadros_ausente = (VOLTAM_EM - SOMEM_EM) * FPS
-    assert quadros_ausente > PIPELINE.missing_frames_before_occluded + 1
+    """A ausência passa de `missing_before_occluded_s` com um quadro de folga,
+    e cada dono fica longe da mala do outro e do outro dono."""
+    ausencia_s = VOLTAM_EM - SOMEM_EM
+    assert ausencia_s > PIPELINE.missing_before_occluded_s + 1.0 / FPS
     for ponto_b in (PONTO_B, PONTO_B_AMBIGUO):
         dono_a, dono_b = lugar_do_dono(PONTO_A, -1.0), lugar_do_dono(ponto_b, +1.0)
         assert dono_a.distance_to(dono_b) > CONFIG.party.proximity_m

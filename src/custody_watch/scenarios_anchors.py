@@ -19,6 +19,7 @@ from .scenario_model import (
     Timing,
     arrive,
     entering,
+    occlusion_declared_s,
     origin_behind,
     person,
     suitcase,
@@ -98,7 +99,7 @@ def _twin_bags(config: Config, swapped: bool) -> Scenario:
     def checks(scn: Scenario, cfg: Config) -> tuple[Premissa, ...]:
         reg = cfg.registry
         gap = anchor_a.distance_to(anchor_b)
-        missing = cfg.pipeline.missing_frames_before_occluded
+        missing = occlusion_declared_s(cfg)
         everything = (0.0, scn.duration_s)
         early, late = (0.0, t_occ0), (t_occ1, scn.duration_s)
         pairs = [
@@ -125,9 +126,10 @@ def _twin_bags(config: Config, swapped: bool) -> Scenario:
                 f"vão {gap:.2f} m",
             ),
             Premissa(
-                "a oclusão dura mais que missing_frames_before_occluded quadros a MIN_FPS",
-                (t_occ1 - t_occ0) * MIN_FPS > missing + 1,
-                f"{t_occ1 - t_occ0:.2f} s",
+                "a oclusão dura mais que o pior atraso de declaração a MIN_FPS "
+                "(missing_before_occluded_s e o piso de quadros sem a bagagem)",
+                t_occ1 - t_occ0 > missing,
+                f"{t_occ1 - t_occ0:.2f} s (atraso {missing:.2f} s)",
             ),
             Premissa(
                 "cada mala reaparece exatamente na própria âncora",
@@ -215,7 +217,7 @@ def new_track_between_occluded(config: Config) -> Scenario:
         radius = cfg.registry.reidentification_radius_m
         search = cfg.pipeline.owner_search_radius_m
         absence = (t_occ0, scn.duration_s)
-        missing = cfg.pipeline.missing_frames_before_occluded
+        missing = occlusion_declared_s(cfg)
         _, _, handler_min = within_stats(
             scn.actor(handler_id), scn.actor(bag_b), search, t_occ0, t_occ1
         )
@@ -242,8 +244,8 @@ def new_track_between_occluded(config: Config) -> Scenario:
             ),
             Premissa(
                 "o track novo aparece com as duas já declaradas ocluídas",
-                (t_occ1 - t_occ0) * MIN_FPS > missing + 1,
-                f"{t_occ1 - t_occ0:.2f} s depois do sumiço",
+                t_occ1 - t_occ0 > missing,
+                f"{t_occ1 - t_occ0:.2f} s depois do sumiço (atraso {missing:.2f} s)",
             ),
             Premissa(
                 "durante a ausência, só o funcionário passa a ≤ owner_search_radius_m",

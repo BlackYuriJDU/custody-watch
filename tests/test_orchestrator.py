@@ -111,7 +111,7 @@ def test_companheiro_recolhe_a_mala_e_retirada_legitima():
     # inequivocamente a 2 e o teste dependa mesmo da fusão de grupos.
     quadros += [[pessoa(2, 10.3), mala(9, 10.2)]] * 3
     # A retirada agora resolve no timeout de oclusão, não no desaparecimento:
-    # os quadros restantes precisam ultrapassar missing_frames_before_occluded
+    # os quadros restantes precisam ultrapassar missing_before_occluded_s
     # + max_occlusion_s de RAPIDO, senão a bagagem nunca sai do estado adiado.
     quadros += [[pessoa(2, 10.3)]] * 16
 
