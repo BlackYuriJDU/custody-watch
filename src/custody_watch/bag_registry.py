@@ -327,12 +327,9 @@ class BagRegistry:
         """
         target = self._bags[bag_id]
         affected: list[int] = []
-        for other in self._bags.values():
-            if other.state in TERMINAL_BAG_STATES:
-                continue
-            if target.anchor.distance_to(other.anchor) <= self._config.ambiguity_radius_m:
-                other.state = BagState.AMBIGUA
-                affected.append(other.bag_id)
+        for other in self._ambiguity_neighbourhood(target):
+            other.state = BagState.AMBIGUA
+            affected.append(other.bag_id)
 
         if events is not None:
             events.emit(
@@ -351,3 +348,41 @@ class BagRegistry:
                 )
             )
         return affected
+
+    def mark_ambiguous_candidates(
+        self,
+        bag_ids: list[int],
+        t: float = 0.0,
+        events: EventLog | None = None,
+    ) -> list[int]:
+        """Marca como AMBIGUA a vizinhança de CADA candidata, não só a da primeira.
+
+        Uma readoção recusada é ambígua entre as candidatas, então todas são
+        incertas (P3). Cada uma está a até um raio de readoção da observação,
+        logo duas podem estar a até dois raios uma da outra -- fora da
+        vizinhança uma da outra. Marcar só a vizinhança da primeira deixava a
+        outra resolvível, e o timeout dela acusava um passante.
+
+        Um `BAG_AMBIGUOUS` por candidata cuja vizinhança ainda tem bagagem a
+        marcar. Candidata que uma vizinhança anterior já cobriu inteira não
+        ganha outro evento sobre a mesma ambiguidade. Devolve os afetados, sem
+        repetição.
+        """
+        affected: list[int] = []
+        for bag_id in bag_ids:
+            vizinhas = self._ambiguity_neighbourhood(self._bags[bag_id])
+            if all(b.state is BagState.AMBIGUA for b in vizinhas):
+                continue
+            for marcada in self.mark_ambiguous_neighbours(bag_id, t=t, events=events):
+                if marcada not in affected:
+                    affected.append(marcada)
+        return affected
+
+    def _ambiguity_neighbourhood(self, target: Bag) -> list[Bag]:
+        """Não terminais dentro de `ambiguity_radius_m` da âncora, incluindo a própria."""
+        return [
+            other
+            for other in self._bags.values()
+            if other.state not in TERMINAL_BAG_STATES
+            and target.anchor.distance_to(other.anchor) <= self._config.ambiguity_radius_m
+        ]
