@@ -59,6 +59,13 @@ def test_argumentos_sao_repassados_intactos(chamadas, nome, script):
     assert chamada["argv"] == [str(chamada["path"]), "--port", "9", "entrada.json", "--flag"]
 
 
+@pytest.mark.parametrize("nome", ["serve", "lab", "demo"])
+def test_allowed_host_chega_ao_script(chamadas, nome):
+    assert cli.main([nome, "--allowed-host", "a.local", "--allowed-host", "b.local"]) == 0
+    (chamada,) = chamadas
+    assert chamada["argv"][-4:] == ["--allowed-host", "a.local", "--allowed-host", "b.local"]
+
+
 def test_help_do_subcomando_vai_para_o_script(chamadas):
     cli.main(["serve", "--help"])
     assert chamadas[0]["argv"][1:] == ["--help"]

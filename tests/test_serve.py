@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from custody_watch.painel import Painel
+
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "serve.py"
 SPEC = importlib.util.spec_from_file_location("custody_serve_script", SCRIPT)
 serve = importlib.util.module_from_spec(SPEC)
@@ -85,6 +87,36 @@ def test_reconnect_recusa_configuracao_invalida_antes_de_abrir_fonte(monkeypatch
     with pytest.raises(SystemExit) as error:
         serve._argumentos()
     assert error.value.code == 2
+
+
+def test_allowed_host_e_repetivel_e_vazio_por_padrao(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["serve.py", "0"])
+    assert serve._argumentos().allowed_host == []
+
+    monkeypatch.setattr(
+        sys, "argv", ["serve.py", "0", "--allowed-host", "a.local", "--allowed-host", "B.local"]
+    )
+    assert serve._argumentos().allowed_host == ["a.local", "B.local"]
+
+
+@pytest.mark.parametrize("nome", ["", "a b", "a/b", "u@a.local", "a.local:8765", "https://a.local"])
+def test_allowed_host_recusa_nome_invalido(monkeypatch, nome):
+    monkeypatch.setattr(sys, "argv", ["serve.py", "0", "--allowed-host", nome])
+    with pytest.raises(SystemExit) as error:
+        serve._argumentos()
+    assert error.value.code == 2
+
+
+def test_allowed_host_chega_ao_servidor():
+    args = argparse.Namespace(
+        cert=None, key=None, host="127.0.0.1", porta=0, allowed_host=["Tela.Local"]
+    )
+    servidor = serve._servidor(args, Painel(), None)
+    try:
+        assert servidor.aceita_host(f"tela.local:{servidor.porta}")
+        assert not servidor.aceita_host(f"outra.local:{servidor.porta}")
+    finally:
+        servidor.server_close()
 
 
 def test_reconnect_e_opt_in_e_exige_pesos_locais_a_cada_reset(tmp_path, monkeypatch):

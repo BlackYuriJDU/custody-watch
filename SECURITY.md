@@ -28,6 +28,10 @@ This describes what the code does today, not a hardening guarantee.
   are required. Only `localhost` and loopback IP literals count as local; any
   other name is treated as network, without resolving it. TLS 1.2 is the
   minimum version, and the TLS handshake has a 10 s deadline.
+- Validates the `Host` header (DNS-rebinding defence) and answers `421` for
+  names not in the accepted set: loopback names, the listen address and any
+  `--allowed-host NAME` given (repeatable). A wildcard listen address also
+  accepts IP literals.
 - **There is no authentication or authorization.** TLS encrypts traffic; it does
   not identify clients (no client certificates are requested). Anyone who can
   reach the port can watch the annotated video, read `/estado`, and send the
@@ -43,6 +47,10 @@ This describes what the code does today, not a hardening guarantee.
 
 - Always binds to `127.0.0.1`; only `--port` is configurable. No TLS and no
   authentication, because it is meant for the local machine only.
+- Validates the `Host` header like the live screen (`421`, connection closed,
+  no content leaked): only `localhost`, `127.0.0.1`, `[::1]` and any
+  `--allowed-host NAME` on its own port are accepted. This blocks DNS
+  rebinding; it is not authentication.
 - Serves fixed assets and read-only GET/HEAD routes; query parameters must match
   an exact expected set. Responses carry `nosniff`, `no-referrer` and a
   `default-src 'self'` Content-Security-Policy.

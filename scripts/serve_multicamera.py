@@ -10,19 +10,34 @@ from custody_watch.camera_registry import load_camera_registry
 from custody_watch.multicamera_media import FrameImages
 from custody_watch.multicamera_server import ReplayServer
 from custody_watch.multicamera_view import ReplayView
+from custody_watch.servidor import nome_permitido
 
 
-def main() -> int:
+def _argumentos(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("registry", type=Path, help="cadastro versionado do laboratório")
     parser.add_argument("--port", type=int, default=8766, help="porta local (default: 8766)")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        type=nome_permitido,
+        metavar="NOME",
+        help="nome extra aceito no cabeçalho Host (repetível), p.ex. um nome atrás de túnel "
+        "ou proxy local; só nome, sem porta",
+    )
+    args = parser.parse_args(argv)
     if not 0 <= args.port <= 65535:
         parser.error("port: esperado número entre 0 e 65535")
+    return args
+
+
+def main() -> int:
+    args = _argumentos()
     try:
         registry = load_camera_registry(args.registry)
         view, images = ReplayView(registry), FrameImages(registry)
-        with ReplayServer(view, images, port=args.port) as server:
+        with ReplayServer(view, images, port=args.port, allowed_hosts=args.allowed_host) as server:
             print(
                 f"Laboratório: http://127.0.0.1:{server.server_port} · Ctrl+C encerra", flush=True
             )

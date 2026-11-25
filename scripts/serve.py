@@ -50,6 +50,7 @@ from custody_watch.servidor import (
     PORTA_PADRAO,
     Servidor,
     contexto_tls,
+    nome_permitido,
     so_nesta_maquina,
 )
 from custody_watch.source_health import SourceHealth
@@ -124,6 +125,15 @@ def _argumentos() -> argparse.Namespace:
         "--host",
         default=HOST_PADRAO,
         help="onde escutar. O padrão é só esta máquina; fora dela exige --cert e --key",
+    )
+    parser.add_argument(
+        "--allowed-host",
+        action="append",
+        default=[],
+        type=nome_permitido,
+        metavar="NOME",
+        help="nome de rede extra aceito no cabeçalho Host (repetível); só nome, sem porta. "
+        "Com --host 0.0.0.0, só IP literal passa sem isto",
     )
     parser.add_argument("--porta", type=int, default=PORTA_PADRAO)
     parser.add_argument("--cert", type=Path, help="certificado TLS (PEM)")
@@ -277,7 +287,14 @@ def _servidor(args: argparse.Namespace, painel: Painel, sessao: LiveSession) -> 
         if arquivo is not None and not arquivo.is_file():
             raise ValueError(f"{arquivo}: arquivo TLS não encontrado")
     tls = contexto_tls(args.cert, args.key) if args.cert is not None else None
-    return Servidor(painel, args.host, args.porta, tls=tls, sessao=sessao)
+    return Servidor(
+        painel,
+        args.host,
+        args.porta,
+        tls=tls,
+        sessao=sessao,
+        nomes_permitidos=getattr(args, "allowed_host", ()),
+    )
 
 
 def _fonte(args: argparse.Namespace, parar: threading.Event, source_health=None):

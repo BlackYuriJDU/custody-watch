@@ -101,7 +101,11 @@ and explicit timing uncertainty. Open the visual lab with:
 .venv\Scripts\python.exe scripts/serve_multicamera.py tests/fixtures/multicamera/two-cameras/registry.json
 ```
 
-Browse to `http://127.0.0.1:8766` (or set `--port`). The local-only interface has
+Browse to `http://127.0.0.1:8766` (or set `--port`). The server checks the `Host`
+header (DNS-rebinding defence) and answers `421` for any name other than
+`localhost`, `127.0.0.1` and `[::1]` on its own port; behind a local tunnel or
+proxy, add a name with `--allowed-host NAME` (repeatable, name only, no port).
+The local-only interface has
 a camera mosaic, a floor-plan view, camera selection, playback/pause, shared
 seeking and speed controls. Synthetic fixtures render schematic views, clearly
 labelled as having no video. Locally available video sources serve decoded JPEG
@@ -143,7 +147,7 @@ uv run python scripts/serve.py 0 --calibration ground.json
 uv run python scripts/serve.py rtsp://camera/stream --calibration ground.json
 ```
 
-and open `http://localhost:8765`. A file is processed without loss, on its own clock — `--passo N` skips frames without shrinking time. A camera (index or URL) always hands over the newest frame, timed by the wall clock: processing every frame of a camera faster than the detector would drift further behind for the whole shift. It listens on this machine only. Listening beyond it with `--host` is refused without `--cert` and `--key`: plain HTTP on a network is the camera open to anyone on the same segment, and a warning in the terminal protects no one. On the gate clip, CPU only, `--passo 2` runs at about real time and the thief is the only N3, ranked first, and reaches the screen while the clip is still playing — not after it ends.
+and open `http://localhost:8765`. A file is processed without loss, on its own clock — `--passo N` skips frames without shrinking time. A camera (index or URL) always hands over the newest frame, timed by the wall clock: processing every frame of a camera faster than the detector would drift further behind for the whole shift. It listens on this machine only. Listening beyond it with `--host` is refused without `--cert` and `--key`: plain HTTP on a network is the camera open to anyone on the same segment, and a warning in the terminal protects no one. The `Host` header is checked too (`421` otherwise): with `--host 0.0.0.0` only IP literals pass, so to reach the screen by a network name add `--allowed-host NAME` (repeatable, name only, no port). On the gate clip, CPU only, `--passo 2` runs at about real time and the thief is the only N3, ranked first, and reaches the screen while the clip is still playing — not after it ends.
 
 The screen separates **server connected** from **receiving images**. Its source
 banner distinguishes initialization, fresh reception, no recent frames,

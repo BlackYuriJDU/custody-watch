@@ -15,6 +15,7 @@ assistir a câmera, e um aviso no terminal não protege ninguém.
 
 from __future__ import annotations
 
+import argparse
 import ipaddress
 import json
 import math
@@ -73,6 +74,18 @@ def nomes_aceitos(host: str, extras: Iterable[str]) -> frozenset[str]:
         if nome not in CURINGAS:
             nomes.add(nome)
     return frozenset(nomes)
+
+
+def nome_permitido(texto: str) -> str:
+    """Tipo de argparse para `--allowed-host`: um nome de rede puro, sem porta,
+    esquema, usuário ou caminho. Um nome com porta nunca casaria com o Host
+    e a recusa ficaria sem explicação."""
+    nome = texto.strip("[]")
+    if not nome or any(c.isspace() or c in "/@\\" for c in nome):
+        raise argparse.ArgumentTypeError(f"nome de rede inválido: {texto!r}")
+    if ":" in nome and not _ip_literal(nome):
+        raise argparse.ArgumentTypeError(f"esperado só o nome, sem porta nem esquema: {texto!r}")
+    return texto
 
 
 def _host_e_porta(autoridade: str, porta_padrao: int) -> tuple[str, int] | None:
