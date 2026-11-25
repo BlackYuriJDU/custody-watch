@@ -4,7 +4,7 @@
 
 custody-watch is research software that ranks luggage custody changes in airport surveillance video for a human operator to review — not faces, not "suspicious people".
 
-> **Status:** runs end to end, from an `.mp4` to a ranked review page for a human operator. Local CPU verification on Windows (2026-11-25, commit `c9b36c9`): `pytest` 1394 passed, 1 skipped; Node tests 88/88. Not verified on GPU or on a physical camera.
+> **Status:** runs end to end, from an `.mp4` to a ranked review page for a human operator. Local CPU verification on Windows (2026-11-25): `pytest` 1405 passed, 1 skipped; Node tests 88/88. Not verified on GPU or on a physical camera.
 >
 > **On a generated theft, it found the thief.** A 40-second gate-area theft made with Veo: the thief is the only top-severity item in the queue, with the right bag and the right owner group. See [The first footage that is not a dataset](EVALUATION_HISTORY.md#the-first-footage-that-is-not-a-dataset).
 >
@@ -620,12 +620,11 @@ Oracle replays (boxes and IDs from annotation) do not validate a detector, compu
 
 ### Synthetic scenario benchmark
 
-`scripts/benchmark_scenarios.py` runs the custody logic on generated scenarios whose correct answer is known by construction (modules `src/custody_watch/scenario*.py`). It has 11 scenarios, each run at 3, 10 and 25 fps: 33 runs per system, without noise and without a seed. On `main` at commit `c9b36c9` the system is right in 27 of 33 runs; a naive distance baseline is right in 24 of 33.
+`scripts/benchmark_scenarios.py` runs the custody logic on generated scenarios whose correct answer is known by construction (modules `src/custody_watch/scenario*.py`). It has 11 scenarios, each run at 3, 10 and 25 fps: 33 runs per system, without noise and without a seed. As of 2026-11-25 the system is right in 30 of 33 runs; a naive distance baseline is right in 24 of 33.
 
-This measures the logic on positions the generator produces. It does not demonstrate a detector, computed association or real video, and these counts are not a performance claim for real footage. The 6 errors are two scenarios:
+This measures the logic on positions the generator produces. It does not demonstrate a detector, computed association or real video, and these counts are not a performance claim for real footage. The 3 errors are one scenario:
 
 - `sit_beside_then_take`: the system accuses, but outside the time tolerance.
-- `twin_bags_swapped_ids`: track IDs are swapped between twin bags.
 
 The output JSON goes to `outputs/`, which is gitignored, so no result file is linked. To reproduce, from a checkout (the output path must be new; the script never overwrites):
 

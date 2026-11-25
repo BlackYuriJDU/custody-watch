@@ -291,6 +291,15 @@ class _Session:
         Um track novo no mesmo lugar mais tarde é outra pergunta, e passa
         normalmente: a recusa não envenena a região.
         """
+        self.bag_track_last_frame: dict[int, int] = {}
+        """Último quadro em que cada track bruto de bagagem foi observado.
+
+        Diz se um track está voltando de uma ausência -- é só nesse caso que a
+        posição pode desmentir o id (ver `_confere_ancora`). Guarda apenas os
+        tracks vistos há menos de `missing_frames_before_occluded` quadros:
+        ausente daqui significa "voltando", então podar não perde nada e o
+        mapa não cresce com a sessão.
+        """
 
         # Marcações para não repetir o mesmo flag a cada frame.
         self.near_since: dict[tuple[int, int], float] = {}
@@ -446,8 +455,8 @@ class _Session:
         registrava como bagagem nova enquanto a original seguia ocluída rumo
         ao timeout.
 
-        Não é o P2 completo. `observe()` segue indexando por `track_id`, e
-        quarenta malas pretas idênticas continuam em aberto.
+        Track já conhecido que volta de uma ausência fora da própria âncora
+        passa pela mesma pergunta em `_confere_ancora`.
         """
         candidatas = self.registry.occluded_near(
             observation.position, self.config.registry.reidentification_radius_m
@@ -461,8 +470,22 @@ class _Session:
             )
             return AMBIGUOUS
 
-        bag = candidatas[0]
+        return self._readota(observation, candidatas[0])
+
+    def _readota(self, observation: Observation, bag: Bag, anterior: Bag | None = None) -> Bag:
+        """Faz o track responder por `bag` e registra a religação.
+
+        `anterior` é a bagagem pela qual o track respondia até aqui, quando
+        havia uma: sai na evidência para que a troca seja reconstruível.
+        """
         self.registry.link_track(observation.track_id, bag.bag_id)
+        evidence: dict = {
+            "from_track": observation.track_id,
+            "occluded_s": self.t - bag.occluded_since,
+            "distance_m": bag.anchor.distance_to(observation.position),
+        }
+        if anterior is not None:
+            evidence["previous_bag"] = anterior.bag_id
         self.events.emit(
             Event(
                 kind=EventKind.TRACK_RELINKED,
@@ -471,14 +494,65 @@ class _Session:
                 subject=None,
                 bag=bag.bag_id,
                 party=bag.owner_party,
-                evidence={
-                    "from_track": observation.track_id,
-                    "occluded_s": self.t - bag.occluded_since,
-                    "distance_m": bag.anchor.distance_to(observation.position),
-                },
+                evidence=evidence,
             )
         )
         return bag
+
+    def _voltando_de_ausencia(self, track_id: int) -> bool:
+        """O track ficou fora de quadro tempo bastante para ter sido ocluído?
+
+        Mesma régua da bagagem: `missing_frames_before_occluded` quadros
+        seguidos sem observação. Uma falha de um quadro do detector não é
+        ausência, e não pode abrir a troca de identidade.
+        """
+        ultimo = self.bag_track_last_frame.get(track_id)
+        if ultimo is None:
+            return True
+        ausente = self.frames - ultimo - 1
+        return ausente >= self.config.pipeline.missing_frames_before_occluded
+
+    def _confere_ancora(self, observation: Observation, known: Bag) -> Bag | None:
+        """Regra P2 para track já conhecido: a posição desmente o id?
+
+        Duas malas iguais somem juntas e voltam cada uma na própria âncora,
+        com os ids trocados -- aparência nenhuma impede isso. Seguir o id lia
+        as duas como deslocadas, e cada dono que levasse a sua era acusado de
+        levar a do outro. Então, quando um track volta de uma ausência fora da
+        própria âncora e sobre a de outra bagagem ocluída, ele passa a
+        responder por ela, como faria um track novo em `adopt_occluded`.
+
+        Só para track que volta de ausência: mala levada em plena vista que
+        cruza a âncora de uma vizinha ocluída continua sendo ela mesma -- é
+        `carry_away` quem decide. E só para custódia aberta: id terminal não
+        troca de bagagem.
+
+        Mais de uma âncora ocluída no raio de readoção (a própria inclusive):
+        P3, todas AMBIGUA e o track descartado, como em `adopt_occluded`.
+        Devolve `None` nesse caso; senão, a bagagem que responde pelo track.
+        """
+        if known.state in TERMINAL_BAG_STATES:
+            return known
+        if not self._voltando_de_ausencia(observation.track_id):
+            return known
+        if not self.registry.has_moved(observation):
+            return known
+
+        candidatas = self.registry.occluded_near(
+            observation.position, self.config.registry.reidentification_radius_m
+        )
+        outras = [bag for bag in candidatas if bag.bag_id != known.bag_id]
+        if not outras:
+            return known
+
+        if len(candidatas) > 1:
+            self.registry.mark_ambiguous_candidates(
+                [bag.bag_id for bag in candidatas], t=self.t, events=self.events
+            )
+            self.ambiguous_tracks.add(observation.track_id)
+            return None
+
+        return self._readota(observation, outras[0], anterior=known)
 
     def end_occlusion(self, bag: Bag) -> None:
         """A bagagem voltou. Registra o intervalo e limpa o estado.
@@ -706,6 +780,10 @@ class _Session:
         track já declarado ambíguo, readoção recusada por ambiguidade,
         bagagem vetada pela imagem, ou bagagem que ainda não parou.
 
+        Track conhecido também passa pela âncora (`_confere_ancora`): voltando
+        de uma ausência sobre a âncora de outra bagagem ocluída, a posição
+        manda, não o id.
+
         O veto vem depois da readoção de propósito: ele fala de âncora nova.
         Uma bagagem já registrada que passa a ser carregada é justamente o
         que `carry_away` precisa ver -- vetá-la faria o furto virar sumiço.
@@ -715,7 +793,7 @@ class _Session:
 
         known = self.registry.get_by_track(observation.track_id)
         if known is not None:
-            return known
+            return self._confere_ancora(observation, known)
 
         adotada = self.adopt_occluded(observation)
         if adotada is AMBIGUOUS:
@@ -814,6 +892,8 @@ class _Session:
 
         for observation in bags:
             conhecida = self.identify(observation, people)
+            # Depois de `identify`, que precisa saber se o track estava ausente.
+            self.bag_track_last_frame[observation.track_id] = self.frames
             if conhecida is None:
                 continue
             if self.registry.is_archived(conhecida.bag_id):
@@ -841,7 +921,18 @@ class _Session:
             self.claim_ownership(bag, people)
 
         self.forget_stale_pending()
+        self.forget_absent_bag_tracks()
         return seen
+
+    def forget_absent_bag_tracks(self) -> None:
+        """Track fora do mapa já conta como voltando de ausência, então quem
+        passou do limiar sai sem mudar decisão nenhuma."""
+        limiar = self.config.pipeline.missing_frames_before_occluded
+        self.bag_track_last_frame = {
+            track: quadro
+            for track, quadro in self.bag_track_last_frame.items()
+            if self.frames - quadro < limiar
+        }
 
     def relational_flags(self, people: list[Observation]) -> None:
         """Flags N1 e N2. Regra P4: relação pessoa-bagagem, nunca atributo."""
