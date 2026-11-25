@@ -23,7 +23,7 @@ def depositor(scn: Scenario, bag_id: int, owner_id: int, config: Config) -> Prem
     t = bag.first_visible_t()
     where = bag.position(t)
     people = [a for a in scn.actors if a.is_person and a.is_visible(t)]
-    nearest = min(people, key=lambda p: p.position(t).distance_to(where))
+    nearest = min(people, key=lambda p, t=t, where=where: p.position(t).distance_to(where))
     d = nearest.position(t).distance_to(where)
     limit = config.pipeline.owner_search_radius_m
     return Premissa(
@@ -117,7 +117,7 @@ def nearest_while_displaced(
             continue
         displaced += PREMISE_STEP_S
         people = [a for a in scn.actors if a.is_person and a.is_visible(t)]
-        nearest = min(people, key=lambda p: p.position(t).distance_to(where))
+        nearest = min(people, key=lambda p, t=t, where=where: p.position(t).distance_to(where))
         if nearest.track_id != expected or nearest.position(t).distance_to(where) > limit:
             wrong += 1
     need = config.custody.carry_confirm_s + 2.0 / MIN_FPS

@@ -34,7 +34,8 @@ def test_json_traz_proveniencia_alcance_e_resultados(tmp_path):
     assert len(doc["commit"]["sha"]) == 40
     assert isinstance(doc["commit"]["sujo"], bool)
     assert len(doc["config_sha256"]) == 64
-    assert doc["fontes_sha256"] and all(doc["fontes_sha256"].values())
+    assert doc["fontes_sha256"]
+    assert all(doc["fontes_sha256"].values())
     assert doc["fps"] == [3.0]
     assert doc["seeds"] == []
     assert doc["ruido"] is None

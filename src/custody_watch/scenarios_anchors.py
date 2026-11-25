@@ -131,7 +131,7 @@ def _twin_bags(config: Config, swapped: bool) -> Scenario:
             ),
             Premissa(
                 "cada mala reaparece exatamente na própria âncora",
-                back_a == 0.0 and back_b == 0.0,
+                max(back_a, back_b) <= 0.0,
                 f"desvios {back_a:.3f} m e {back_b:.3f} m",
             ),
             *windowed_quiet(scn, pairs, cfg),

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 import sys
 from collections import Counter
@@ -86,7 +87,7 @@ sozinho não identifica o que rodou."""
 
 def _fps(text: str) -> float:
     value = float(text)
-    if not value >= MIN_FPS:
+    if math.isnan(value) or value < MIN_FPS:
         raise argparse.ArgumentTypeError(f"fps deve ser ≥ {MIN_FPS}, recebido {text}")
     return value
 
