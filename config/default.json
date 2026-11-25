@@ -40,7 +40,7 @@
   },
   "pipeline": {
     "owner_search_radius_m": 3.0,
-    "missing_frames_before_occluded": 5,
+    "missing_before_occluded_s": 0.18,
     "merge_every_frames": 25,
     "history_window_s": 10.0,
     "contact_radius_m": 0.8,

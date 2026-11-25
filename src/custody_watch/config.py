@@ -74,7 +74,21 @@ class PipelineConfig:
     """Números do orquestrador. Antes eram constantes soltas no módulo."""
 
     owner_search_radius_m: float = 3.0
-    missing_frames_before_occluded: int = 5
+    missing_before_occluded_s: float = 0.18
+    """Tempo sem observação até a bagagem contar como ocluída.
+
+    Substitui `missing_frames_before_occluded`, 5 quadros: 0,2 s a 25 fps e
+    1,67 s a 3 fps, a mesma cena esperando oito vezes mais conforme a fonte.
+    A 25 fps, a taxa do CAVIAR em que os 5 quadros foram ajustados, qualquer
+    valor em (4/25, 5/25] = (0,16; 0,20] s decide no mesmo quinto quadro de
+    antes. 0,18 é o meio do intervalo: soma binária de 0,04 s e jitter de
+    timestamp de até 20 ms não mudam o quadro da decisão.
+
+    Vale junto com o piso de quadros seguidos sem a bagagem do orquestrador
+    (`orchestrator.MIN_MISSING_FRAMES`, 2): falha de detector é evento por
+    quadro, e a 3 fps uma só já dura 0,33 s. Com os dois, a oclusão abre em
+    0,2 s a 25 e a 10 fps, e em 0,67 s (dois quadros) a 3 fps.
+    """
     merge_every_frames: int = 25
     history_window_s: float = 10.0
     contact_radius_m: float = 0.8
@@ -249,15 +263,17 @@ SAFE_BOUNDS: dict[str, Bounds] = {
         "55cm ocupa a 73 px/m, a exigência medida contra o CAVIAR. Zero desliga "
         "o piso, o que só é honesto para caixa anotada à mão",
     ),
-    "pipeline.missing_frames_before_occluded": Bounds(
-        2,
-        50,
-        "abaixo de 2, todo tropeço do detector abre um intervalo de oclusão, e "
-        "a lista de candidatos acumula quem apenas passou por perto até a "
-        "atribuição não apontar mais ninguém em particular; acima de 50 a "
-        "bagagem segue 'visível' na lógica por segundos depois de sumir da "
-        "tela, e a janela de candidatos perde justamente quem estava em cima "
-        "dela",
+    "pipeline.missing_before_occluded_s": Bounds(
+        0.08,
+        2.0,
+        "abaixo de 0.08s (dois quadros a 25 fps), toda rajada curta do detector "
+        "numa fonte rápida abre um intervalo de oclusão -- o piso de dois "
+        "quadros seguidos do orquestrador só barra a falha isolada --, e a "
+        "lista de candidatos acumula quem apenas passou por perto até a "
+        "atribuição não apontar mais ninguém em particular; acima de 2s "
+        "(cinquenta quadros a 25 fps) a bagagem segue 'visível' na lógica por "
+        "segundos depois de sumir da tela, e a janela de candidatos perde "
+        "justamente quem estava em cima dela",
     ),
     "reid.min_similarity": Bounds(
         0.70,
@@ -306,6 +322,19 @@ SAFE_BOUNDS: dict[str, Bounds] = {
     ),
 }
 
+RETIRED_FIELDS: dict[str, str] = {
+    "pipeline.missing_frames_before_occluded": (
+        "contava quadros, e a mesma cena esperava durações reais diferentes "
+        "conforme o fps da fonte. Use pipeline.missing_before_occluded_s, em "
+        "segundos: N quadros valem N / fps da fonte em que o valor foi "
+        "ajustado. Não há conversão automática porque a config não conhece o "
+        "fps, e supor um reabriria o defeito em silêncio. O default novo, 0.18, "
+        "decide no mesmo quinto quadro de antes a 25 fps"
+    ),
+}
+"""Campos removidos e o que pôr no lugar. Continuam recusados como qualquer
+campo desconhecido, mas com a mensagem de migração em vez da lista seca."""
+
 _SECTIONS = {field.name: field.type for field in fields(Config)}
 
 
@@ -349,6 +378,19 @@ def _resolve(key: str, raw: Any) -> float | int:
     return value
 
 
+def _unknown_field_error(
+    path: Path, section_name: str, field_name: str, known: set[str]
+) -> ValueError:
+    """Campo retirado diz o que pôr no lugar; o resto lista os esperados."""
+    key = f"{section_name}.{field_name}"
+    retired = RETIRED_FIELDS.get(key)
+    if retired is not None:
+        return ValueError(f"{path}: campo retirado {key!r}: {retired}")
+    return ValueError(
+        f"{path}: campo desconhecido {section_name}.{field_name!r}; esperados {sorted(known)}"
+    )
+
+
 def load_config(path: Path | str) -> Config:
     """Carrega config de JSON, mesclando com os defaults.
 
@@ -376,10 +418,7 @@ def load_config(path: Path | str) -> Config:
 
         for field_name, raw in section_data.items():
             if field_name not in known:
-                raise ValueError(
-                    f"{path}: campo desconhecido {section_name}.{field_name!r}; "
-                    f"esperados {sorted(known)}"
-                )
+                raise _unknown_field_error(path, section_name, field_name, known)
             updates[field_name] = _resolve(f"{section_name}.{field_name}", raw)
 
         config = replace(config, **{section_name: replace(current, **updates)})

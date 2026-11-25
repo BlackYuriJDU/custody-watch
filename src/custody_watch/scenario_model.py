@@ -16,6 +16,7 @@ import numpy as np
 
 from .config import Config
 from .ground_plane import GroundPlane
+from .orchestrator import MIN_MISSING_FRAMES
 from .scenario_motion import Actor, Route, Waypoint, last_before, render
 from .scenario_scoring import Category, DueSignal, Expectation
 from .tracking import TrackedDetection, anchor_vetoes
@@ -24,7 +25,8 @@ from .types import Point
 MIN_FPS = 3.0
 """Menor taxa de quadros para a qual as premissas temporais valem. Prazos que
 dependem da cadência (fusão de grupos a cada `merge_every_frames` quadros,
-quadros até declarar oclusão) são dimensionados para ela, o pior caso."""
+o piso de quadros e o quadro em que a oclusão vence) são dimensionados para
+ela, o pior caso."""
 WALK_SPEED_MS = 1.2
 """Passo de pedestre; perto da mediana medida no CAVIAR (1,34 m/s, `tracking.py`)."""
 QUEUE_SPEED_MS = 0.5
@@ -125,6 +127,17 @@ class Scenario:
 # --- prazos derivados da config ------------------------------------------------
 
 
+def occlusion_declared_s(config: Config) -> float:
+    """Pior atraso, a MIN_FPS, entre a última observação e a oclusão aberta.
+
+    As duas réguas do orquestrador: o limiar em segundos decide até um quadro
+    depois de vencer, e nunca antes de `MIN_MISSING_FRAMES` quadros sem a
+    bagagem. A 3 fps manda o piso: dois quadros, 0,67 s.
+    """
+    pelo_tempo = config.pipeline.missing_before_occluded_s + 1.0 / MIN_FPS
+    return max(pelo_tempo, MIN_MISSING_FRAMES / MIN_FPS)
+
+
 @dataclass(frozen=True)
 class Timing:
     config: Config
@@ -149,8 +162,10 @@ class Timing:
 
     @property
     def occlusion_s(self) -> float:
-        frames = self.config.pipeline.missing_frames_before_occluded + 2
-        return frames / MIN_FPS + self.config.custody.min_occlusion_report_s
+        """Ausência declarada e registrada: o pior atraso de declaração a
+        MIN_FPS, um quadro de folga e o piso do log."""
+        declarada = occlusion_declared_s(self.config) + 1.0 / MIN_FPS
+        return declarada + self.config.custody.min_occlusion_report_s
 
     @property
     def tail_s(self) -> float:
@@ -258,8 +273,7 @@ def no_vetoes(scn: Scenario, config: Config) -> Premissa:
 
 
 def tail(scn: Scenario, config: Config) -> Premissa:
-    frames = config.pipeline.missing_frames_before_occluded + 1
-    need = config.custody.max_occlusion_s + frames / MIN_FPS
+    need = config.custody.max_occlusion_s + occlusion_declared_s(config)
     have = scn.duration_s - scn.mark("ultima_acao")
     return Premissa(
         "a cena roda ≥ max_occlusion_s após a última ação: nenhuma decisão fica adiada",

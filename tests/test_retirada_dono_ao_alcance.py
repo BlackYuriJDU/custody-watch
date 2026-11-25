@@ -175,7 +175,8 @@ então `carry_away` roda de novo a cada degrau, por toda a cena."""
 
 T_FIM_FILA = T_PUXA_FILA + 30.0
 OCLUSAO = CONFIG.custody.max_occlusion_s
-QUADROS_ATE_OCLUIR = CONFIG.pipeline.missing_frames_before_occluded
+ATE_OCLUIR_S = CONFIG.pipeline.missing_before_occluded_s + PASSO
+"""O limiar de oclusão decide até um quadro depois de vencer."""
 
 
 def fila_longa(t: float) -> Quadro:
@@ -203,7 +204,7 @@ def test_dono_acompanhando_a_mala_por_muito_tempo_ainda_retira_a_propria_mala():
         d = distancias_a_mala(fila_longa, t)
         assert d[ESTRANHO] < d[DONO] <= RAIO, (t, d)
 
-    duracao = T_FIM_FILA + QUADROS_ATE_OCLUIR * PASSO + OCLUSAO + 2.0
+    duracao = T_FIM_FILA + ATE_OCLUIR_S + OCLUSAO + 2.0
     resultado = rodar(fila_longa, duracao)
 
     assert_dono_forte_da_mala(resultado, DONO)

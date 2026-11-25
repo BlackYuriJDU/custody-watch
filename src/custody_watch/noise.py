@@ -1,7 +1,7 @@
 """Degradação de detecção, para medir o envelope de operação da lógica.
 
 Três limiares em produção — `carry_confirm_s`, `max_occlusion_s` e
-`missing_frames_before_occluded` — têm faixa declarada mas valor escolhido por
+`missing_before_occluded_s` — têm faixa declarada mas valor escolhido por
 julgamento. Esta camada existe para trocar julgamento por medição: ela degrada
 um iterador de detecções limpo e a varredura observa a que ponto a lógica
 deixa de operar dentro do orçamento do operador.
@@ -170,8 +170,8 @@ A rajada tem comprimento **fixo**, e isso é simplificação declarada. A
 distribuição real é pesada na cauda — mediana de 2 quadros, p95 de 56, máxima
 de 517 — e uma rajada fixa de 12 não produz nem as curtas nem as muito longas.
 Para a lógica isso sobre-estima a frequência com que a oclusão é acionada:
-toda rajada cruza os 5 quadros de `missing_frames_before_occluded`, quando na
-realidade metade delas não cruzaria.
+toda rajada cruza os 0,18 s de `missing_before_occluded_s` (o quinto quadro a
+25 fps), quando na realidade metade delas não cruzaria.
 
 `position_sigma_px` usa o desvio de `dy` (2,32px) e não o de `dx` (1,45px),
 que é o conservador e também o certo: `ground_plane.foot_point` projeta a

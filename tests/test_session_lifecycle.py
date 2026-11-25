@@ -53,7 +53,7 @@ def test_colecao_nova_exige_atualizar_instrumentacao_e_contrato_de_retencao():
                 "pending_bags",
                 "vetoes",
                 "ambiguous_tracks",
-                "bag_track_last_frame",
+                "bag_track_last_seen",
                 "near_since",
                 "proximity_flagged",
                 "contact_flagged",

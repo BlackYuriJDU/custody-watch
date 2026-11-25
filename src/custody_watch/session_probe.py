@@ -40,7 +40,8 @@ RETENTION = {
     "pending_bag_samples": "janela rest_confirm_s por candidata; não é evento nem posse",
     "vetoes": "substituído a cada frame; veto visual ao nascimento de âncora",
     "ambiguous_tracks": "sessão inteira; recusa persistente por track impede bag fantasma",
-    "bag_track_last_frame": "tracks de bagagem vistos há < missing_frames_before_occluded quadros",
+    "bag_track_last_seen": "tracks de bagagem ausentes há < missing_before_occluded_s "
+    "ou < MIN_MISSING_FRAMES quadros",
     "near_since": "pares pessoa/bag; sai por distância ou ausência acima de party.max_gap_s",
     "proximity_flagged": "deduplicação pessoa/bag da sessão; não expirar sem contrato de replay",
     "contact_flagged": "deduplicação; posse tardia pode limpar contatos do dono",
@@ -198,7 +199,7 @@ class SessionProbe:
                 "pending_bag_samples": sum(len(b.amostras) for b in s.pending_bags.values()),
                 "vetoes": len(s.vetoes),
                 "ambiguous_tracks": len(s.ambiguous_tracks),
-                "bag_track_last_frame": len(s.bag_track_last_frame),
+                "bag_track_last_seen": len(s.bag_track_last_seen),
                 "near_since": len(s.near_since),
                 "proximity_flagged": len(s.proximity_flagged),
                 "contact_flagged": len(s.contact_flagged),

@@ -58,6 +58,7 @@ import threading
 from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
 from itertools import combinations
+from typing import NamedTuple
 
 from .alerts import AlertItem, build_queue
 from .bag_registry import BagRegistry
@@ -90,6 +91,42 @@ BAG_APONTADA = "suitcase"
 """Classe da observação que o operador cria. O registro não guarda classe --
 bagagem é bagagem -- mas a observação precisa de uma que seja de bagagem para
 ser coerente com o resto do pipeline."""
+
+MIN_MISSING_FRAMES = 2
+"""Quadros seguidos sem observação abaixo dos quais nenhuma ausência é oclusão.
+
+Vale junto com `pipeline.missing_before_occluded_s`, nunca no lugar dele.
+Falha do detector é evento por quadro, não por tempo: a 3 fps uma falha
+isolada já dura 0,33 s, mais que o limiar em segundos, e sem o piso todo
+tropeço de uma fonte lenta abria um intervalo de oclusão -- a lista de
+candidatos acumulava quem só passou por perto até a atribuição não apontar
+mais ninguém em particular. A duração física se mede em segundos; a
+repetição da falha, em quadros. A 25 fps o piso não decide nada: os 0,18 s
+já pedem cinco quadros. Fica no código, e não na config, porque abaixo de
+dois o tropeço volta, e acima disso quem se ajusta é o limiar em segundos."""
+
+
+class _Ausencia(NamedTuple):
+    """Quanto algo ficou sem ser visto, nas duas réguas da oclusão."""
+
+    segundos: float
+    quadros: int
+
+
+_SEM_AUSENCIA = _Ausencia(0.0, 0)
+
+
+def _ausencia_ate(visto: _Visto, t: float, quadro: int) -> _Ausencia:
+    """Ausência de um track visto em `visto` até o quadro `quadro`, no
+    instante `t`, contado como o último quadro em que ele faltou."""
+    return _Ausencia(t - visto.t, quadro - visto.quadro)
+
+
+class _Visto(NamedTuple):
+    """Instante e quadro da última observação de um track."""
+
+    t: float
+    quadro: int
 
 
 def _quem_esta_em(tracked: Iterable[TrackedDetection], px: float, py: float) -> int | None:
@@ -272,7 +309,11 @@ class _Session:
         self.gate = PlausibilityGate(config.pipeline.max_observation_speed_ms)
 
         self.history: dict[int, list[Observation]] = {}
-        self.missing: dict[int, int] = {}
+        self.missing: dict[int, _Ausencia] = {}
+        """Ausência de cada bagagem que falta, nas duas réguas. A cada quadro
+        em que ela falta soma-se um quadro e o intervalo desde o quadro
+        anterior: conta os mesmos quadros que o antigo contador contava, e o
+        que cada um durou. Sai quando a bagagem volta a ser vista na âncora."""
         self.pending_bags: dict[int, _Pendente] = {}
         """Bagagens vistas mas ainda não paradas. Ver `anchoring`."""
         self.vetoes: dict[int, str] = {}
@@ -291,14 +332,16 @@ class _Session:
         Um track novo no mesmo lugar mais tarde é outra pergunta, e passa
         normalmente: a recusa não envenena a região.
         """
-        self.bag_track_last_frame: dict[int, int] = {}
-        """Último quadro em que cada track bruto de bagagem foi observado.
+        self.bag_track_last_seen: dict[int, _Visto] = {}
+        """Instante e quadro em que cada track bruto de bagagem foi observado
+        pela última vez.
 
         Diz se um track está voltando de uma ausência -- é só nesse caso que a
         posição pode desmentir o id (ver `_confere_ancora`). Guarda apenas os
-        tracks vistos há menos de `missing_frames_before_occluded` quadros:
-        ausente daqui significa "voltando", então podar não perde nada e o
-        mapa não cresce com a sessão.
+        tracks cuja ausência ainda não venceu as duas réguas
+        (`missing_before_occluded_s` e `MIN_MISSING_FRAMES`): ausente daqui
+        significa "voltando", então podar não perde nada e o mapa não cresce
+        com a sessão.
         """
 
         # Marcações para não repetir o mesmo flag a cada frame.
@@ -309,6 +352,9 @@ class _Session:
 
         self.frames = 0
         self.t = 0.0
+        self.previous_t = 0.0
+        """Instante do quadro anterior. Ausência se mede até o último quadro
+        em que a coisa faltou, então é ele que dá a duração de cada falta."""
 
     # --- percepção ------------------------------------------------------
 
@@ -502,15 +548,22 @@ class _Session:
     def _voltando_de_ausencia(self, track_id: int) -> bool:
         """O track ficou fora de quadro tempo bastante para ter sido ocluído?
 
-        Mesma régua da bagagem: `missing_frames_before_occluded` quadros
-        seguidos sem observação. Uma falha de um quadro do detector não é
+        Mesmas réguas da bagagem (`_ausencia_basta`), medidas até o último
+        quadro em que o track faltou -- o anterior a este, em que ele volta.
+        Uma falha curta do detector, ou de um quadro só numa fonte lenta, não é
         ausência, e não pode abrir a troca de identidade.
         """
-        ultimo = self.bag_track_last_frame.get(track_id)
-        if ultimo is None:
+        visto = self.bag_track_last_seen.get(track_id)
+        if visto is None:
             return True
-        ausente = self.frames - ultimo - 1
-        return ausente >= self.config.pipeline.missing_frames_before_occluded
+        return self._ausencia_basta(_ausencia_ate(visto, self.previous_t, self.frames - 1))
+
+    def _ausencia_basta(self, ausencia: _Ausencia) -> bool:
+        """A ausência já é oclusão? As duas réguas, juntas: a duração física
+        em segundos e a falha repetida em quadros (`MIN_MISSING_FRAMES`)."""
+        if ausencia.quadros < MIN_MISSING_FRAMES:
+            return False
+        return ausencia.segundos >= self.config.pipeline.missing_before_occluded_s
 
     def _confere_ancora(self, observation: Observation, known: Bag) -> Bag | None:
         """Regra P2 para track já conhecido: a posição desmente o id?
@@ -893,7 +946,7 @@ class _Session:
         for observation in bags:
             conhecida = self.identify(observation, people)
             # Depois de `identify`, que precisa saber se o track estava ausente.
-            self.bag_track_last_frame[observation.track_id] = self.frames
+            self.bag_track_last_seen[observation.track_id] = _Visto(self.t, self.frames)
             if conhecida is None:
                 continue
             if self.registry.is_archived(conhecida.bag_id):
@@ -926,12 +979,13 @@ class _Session:
 
     def forget_absent_bag_tracks(self) -> None:
         """Track fora do mapa já conta como voltando de ausência, então quem
-        passou do limiar sai sem mudar decisão nenhuma."""
-        limiar = self.config.pipeline.missing_frames_before_occluded
-        self.bag_track_last_frame = {
-            track: quadro
-            for track, quadro in self.bag_track_last_frame.items()
-            if self.frames - quadro < limiar
+        passou do limiar sai sem mudar decisão nenhuma. A ausência é medida
+        como `_voltando_de_ausencia` a mediria no quadro seguinte, se o track
+        faltasse a partir deste."""
+        self.bag_track_last_seen = {
+            track: visto
+            for track, visto in self.bag_track_last_seen.items()
+            if not self._ausencia_basta(_ausencia_ate(visto, self.t, self.frames))
         }
 
     def relational_flags(self, people: list[Observation]) -> None:
@@ -994,8 +1048,10 @@ class _Session:
             if bag.bag_id in seen:
                 continue
 
-            self.missing[bag.bag_id] = self.missing.get(bag.bag_id, 0) + 1
-            if self.missing[bag.bag_id] < self.config.pipeline.missing_frames_before_occluded:
+            antes = self.missing.get(bag.bag_id, _SEM_AUSENCIA)
+            ausencia = _Ausencia(antes.segundos + (self.t - self.previous_t), antes.quadros + 1)
+            self.missing[bag.bag_id] = ausencia
+            if not self._ausencia_basta(ausencia):
                 continue
 
             if bag.occluded_since is None:
@@ -1114,6 +1170,9 @@ class LiveSession:
     def _alimenta(self, t: float, tracked: list[TrackedDetection]) -> None:
         s = self._s
         pipeline = s.config.pipeline
+        # No primeiro quadro não há anterior: falta nenhuma pode durar o
+        # intervalo desde o zero do relógio.
+        s.previous_t = s.t if s.frames else t
         s.frames += 1
         s.t = t
 
