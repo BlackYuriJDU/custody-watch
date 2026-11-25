@@ -196,6 +196,36 @@ class Timing:
         reach = self.config.registry.moved_threshold_m / speed_ms
         return reach + self.config.custody.carry_confirm_s + 2.0 / MIN_FPS + EVENT_SLACK_S
 
+    def accusation_beside_owner_tolerance_s(self, start_gap_m: float, speed_ms: float) -> float:
+        """Prazo da acusação quando a retirada começa com o dono ao alcance.
+
+        Não é folga ajustada: é o pior caso da regra de `carry_away` para uma
+        mala que se afasta do dono parado em linha reta, a `speed_ms`, a
+        partir de `start_gap_m` dele. Três termos, a partir da retirada:
+
+        1. **Sair do alcance e andar um limiar** -- ``(R - d0 + m) / v``.
+           Enquanto a mala está a ≤ R = `owner_search_radius_m` do dono, a
+           custódia continua e a âncora a acompanha, mas só em degraus de
+           m = `moved_threshold_m` (`BagRegistry.observe`). A última âncora
+           dentro do alcance está a no máximo R do dono, e `carry_away` só
+           volta a rodar quando a mala se afasta m dela: a no máximo R + m do
+           dono, a v, partindo de d0.
+        2. **Confirmar** -- `carry_confirm_s`.
+        3. **Amostragem** -- ``2 / MIN_FPS``: até um quadro para ver o
+           deslocamento que começa a contar e um para a confirmação vencer.
+           A decisão não passa por oclusão (a mala segue visível), então
+           `occlusion_declared_s` não entra.
+
+        Sem `EVENT_SLACK_S`: o pior caso já está coberto termo a termo.
+        Default (R = 3,0; d0 = 0,6; m = 0,5; v = 1,2; c = 1,0; MIN_FPS = 3):
+        (3,0 - 0,6 + 0,5) / 1,2 + 1,0 + 2 / 3 = 2,417 + 1,0 + 0,667 = 4,083 s.
+        Com o dono fora de alcance (d0 > R) o termo 1 cai para m / v.
+        """
+        radius = self.config.pipeline.owner_search_radius_m
+        moved = self.config.registry.moved_threshold_m
+        walk = (max(radius - start_gap_m, 0.0) + moved) / speed_ms
+        return walk + self.config.custody.carry_confirm_s + 2.0 / MIN_FPS
+
     @property
     def bag_box_height(self) -> float:
         return self.config.pipeline.min_bag_height_px + BAG_BOX_EXTRA_PX
@@ -266,6 +296,19 @@ def accusation_due(track: int, t_take: float, tm: Timing, speed: float) -> DueSi
         t_take,
         tm.accusation_tolerance_s(speed),
         "retirada por quem não é do grupo dono",
+    )
+
+
+def accusation_beside_owner_due(
+    track: int, t_take: float, tm: Timing, start_gap_m: float, speed: float
+) -> DueSignal:
+    """`accusation_due` para retirada que começa com o dono ao alcance da mala."""
+    return DueSignal(
+        Category.ACCUSATION,
+        track,
+        t_take,
+        tm.accusation_beside_owner_tolerance_s(start_gap_m, speed),
+        "retirada por quem não é do grupo dono, a partir do alcance do dono",
     )
 
 

@@ -15,8 +15,8 @@ import pytest
 from custody_watch.config import Config
 from custody_watch.events import EventKind
 from custody_watch.orchestrator import run_session
-from custody_watch.scenario_model import INVARIANTS, KINDS, MIN_FPS
-from custody_watch.scenario_scoring import Category, Verdict, score, system_emissions
+from custody_watch.scenario_model import INVARIANTS, KINDS, MIN_FPS, WALK_SPEED_MS
+from custody_watch.scenario_scoring import Category, Emission, Verdict, score, system_emissions
 from custody_watch.scenarios import build_scenarios, identity_plane
 from custody_watch.tracking import to_observations
 
@@ -28,6 +28,7 @@ PASSAM_NA_MAIN = {
     "owner_returns": Verdict.CORRECT,
     "companion_takes": Verdict.SILENT_CORRECT,
     "stranger_takes": Verdict.CORRECT,
+    "sit_beside_then_take": Verdict.CORRECT,
     "twin_bags_new_ids": Verdict.SILENT_CORRECT,
     "passerby_no_luggage": Verdict.SILENT_CORRECT,
 }
@@ -170,6 +171,71 @@ def test_furto_base_tem_o_mesmo_desfecho_em_3_10_e_25_fps():
 
     assert {veredito(cena.name, fps) for fps in TAXAS} == {Verdict.CORRECT}
     assert acusados == {cena.role("estranho")}
+
+
+# --- prazo da retirada com o dono ao alcance ----------------------------------
+
+
+def _acusacao_devida(cena):
+    return next(d for d in cena.expected.due if d.category is Category.ACCUSATION)
+
+
+def _prazo_esperado(config: Config, cena) -> float:
+    """A conta de `accusation_beside_owner_tolerance_s`, refeita a partir da
+    config e das posições da cena -- não do que a cena declarou."""
+    t_take = cena.mark("retirada")
+    mala, dono = cena.actor(cena.role("bagagem")), cena.actor(cena.role("dono"))
+    d0 = mala.position(t_take).distance_to(dono.position(t_take))
+    saida = config.pipeline.owner_search_radius_m - d0 + config.registry.moved_threshold_m
+    return saida / WALK_SPEED_MS + config.custody.carry_confirm_s + 2.0 / MIN_FPS
+
+
+def test_prazo_do_furto_ao_lado_e_a_soma_dos_termos_da_regra():
+    cena = CENARIOS["sit_beside_then_take"]
+    devida = _acusacao_devida(cena)
+
+    assert devida.reference_t == pytest.approx(cena.mark("retirada"))
+    assert devida.tolerance_s == pytest.approx(_prazo_esperado(CONFIG, cena))
+
+
+def test_prazo_do_furto_ao_lado_acompanha_owner_search_radius_m():
+    raio = CONFIG.pipeline.owner_search_radius_m + 1.0
+    maior = replace(CONFIG, pipeline=replace(CONFIG.pipeline, owner_search_radius_m=raio))
+    cena = {s.name: s for s in build_scenarios(maior)}["sit_beside_then_take"]
+    delta = _acusacao_devida(cena).tolerance_s - _acusacao_devida(CENARIOS[cena.name]).tolerance_s
+
+    assert delta == pytest.approx(1.0 / WALK_SPEED_MS)
+    assert _acusacao_devida(cena).tolerance_s == pytest.approx(_prazo_esperado(maior, cena))
+
+
+@pytest.mark.parametrize(
+    ("atraso_extra_s", "esperado"),
+    [(0.0, Verdict.CORRECT), (1.0 / MIN_FPS + 0.01, Verdict.MISSED)],
+)
+def test_prazo_do_furto_ao_lado_nao_e_frouxo(atraso_extra_s, esperado):
+    """Acusação no prazo derivado acerta; um período de amostragem além, perde."""
+    cena = CENARIOS["sit_beside_then_take"]
+    ladrao = cena.role("estranho")
+    bagagem = cena.role("bagagem")
+    devida = _acusacao_devida(cena)
+    t_acusa = devida.reference_t + _prazo_esperado(CONFIG, cena) + atraso_extra_s
+    emissoes = [
+        Emission(Category.PERSON_SIGNAL, cena.mark("encosta"), ladrao, bagagem, "sintetica"),
+        Emission(Category.ACCUSATION, t_acusa, ladrao, bagagem, "sintetica"),
+    ]
+
+    assert score(cena.expected, emissoes).verdict is esperado
+
+
+def test_premissa_denuncia_mala_que_nao_sai_do_alcance_do_dono():
+    """Com raio maior que todo o trajeto, a mala nunca sai do alcance: a conta
+    do prazo deixa de descrever a cena, e é a premissa que tem de dizer isso."""
+    enorme = replace(CONFIG, pipeline=replace(CONFIG.pipeline, owner_search_radius_m=50.0))
+    cena = {s.name: s for s in build_scenarios(enorme)}["sit_beside_then_take"]
+
+    falhas = [p.descricao for p in cena.premissas(enorme) if not p.valida]
+
+    assert any("sai do alcance" in f for f in falhas)
 
 
 # --- a cena exercita o mecanismo que diz exercitar ----------------------------

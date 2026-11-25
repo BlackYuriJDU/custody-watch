@@ -129,6 +129,42 @@ def nearest_while_displaced(
     )
 
 
+RADIAL_TOLERANCE_M = 1e-6
+"""Erro de ponto flutuante admitido ao conferir que a distância cresce em reta."""
+
+
+def leaves_owner_reach(
+    scn: Scenario,
+    bag_id: int,
+    owner_id: int,
+    window: tuple[float, float],
+    speed_ms: float,
+    config: Config,
+) -> Premissa:
+    """A geometria de `Timing.accusation_beside_owner_tolerance_s`.
+
+    Na retirada o dono alcança a mala (d0 ≤ `owner_search_radius_m`) e, até a
+    última ação, ela se afasta dele em linha reta a `speed_ms`: distância
+    d0 + v·(t - t0). Daí ela sai do alcance em (R - d0) / v.
+    """
+    t0, t1 = window
+    bag, owner = scn.actor(bag_id), scn.actor(owner_id)
+    start_gap = bag.position(t0).distance_to(owner.position(t0))
+    deviation = max(
+        abs(bag.position(t).distance_to(owner.position(t)) - start_gap - speed_ms * (t - t0))
+        for t in _samples(t0, t1)
+    )
+    radius = config.pipeline.owner_search_radius_m
+    leaves_at = max(radius - start_gap, 0.0) / speed_ms
+    return Premissa(
+        f"na retirada o dono {owner_id} está a ≤ owner_search_radius_m da bagagem {bag_id}, "
+        f"que se afasta dele em linha reta a {speed_ms} m/s e sai do alcance",
+        start_gap <= radius and deviation <= RADIAL_TOLERANCE_M and t0 + leaves_at < t1,
+        f"d0 {start_gap:.2f} m (raio {radius:.2f} m), sai do alcance {leaves_at:.2f} s "
+        f"após a retirada, desvio da reta {deviation:.1e} m",
+    )
+
+
 def windowed_quiet(
     scn: Scenario, pairs: list[tuple[int, int, tuple[float, float]]], cfg: Config
 ) -> tuple[Premissa, ...]:
