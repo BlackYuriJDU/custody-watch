@@ -47,6 +47,22 @@ Four principles carry the design:
 
 ## Running it
 
+One entry point wraps the scripts below (from a checkout; arguments pass
+through untouched, so `serve --help` shows the script's own help):
+
+```powershell
+.venv\Scripts\python.exe -m custody_watch demo   # synthetic lab, no weights, video or GPU
+```
+
+| Subcommand | Script |
+| --- | --- |
+| `watch` | `scripts/watch_video.py` |
+| `serve` | `scripts/serve.py` |
+| `replay` | `scripts/replay_multicamera.py` |
+| `lab` | `scripts/serve_multicamera.py` |
+| `evaluate` | `scripts/evaluate_recorded.py` |
+| `demo` | `lab` on `tests/fixtures/multicamera/two-cameras/registry.json` |
+
 The web panel currently handles one source. An offline camera registry and
 synchronized prediction replay now provide the first part of a virtual
 multi-camera lab, without weights, video downloads or a GPU:

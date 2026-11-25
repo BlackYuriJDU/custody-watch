@@ -20,6 +20,9 @@ dependencies = [
     "pillow>=10.0",
 ]
 
+[project.scripts]
+custody-watch = "custody_watch.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
