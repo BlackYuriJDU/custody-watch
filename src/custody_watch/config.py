@@ -89,7 +89,28 @@ class PipelineConfig:
     quadro, e a 3 fps uma só já dura 0,33 s. Com os dois, a oclusão abre em
     0,2 s a 25 e a 10 fps, e em 0,67 s (dois quadros) a 3 fps.
     """
-    merge_every_frames: int = 25
+    merge_every_s: float = 0.98
+    """Intervalo entre duas fusões de grupos, em segundos.
+
+    A fusão não é manutenção: é nela que co-movimento vira vínculo forte (quem
+    conta como dono, regra P1), que o cronômetro do vínculo fraco começa e
+    conclui, e que um afastamento o zera. Roda no primeiro quadro a pelo
+    menos este tempo da fusão anterior -- ou do primeiro quadro da sessão,
+    para a primeira --, então nunca mais que um quadro depois de vencer.
+
+    Substitui `merge_every_frames`, 25 quadros: 1 s a 25 fps e 8,33 s a 3 fps,
+    a mesma cena formando o grupo em tempos reais diferentes conforme a fonte.
+    A 25 fps, a taxa do CAVIAR em que os 25 quadros foram ajustados, qualquer
+    valor em (24/25, 25/25] = (0,96; 1,00] s funde a cada 25 quadros, como
+    antes. 0,98 é o meio do intervalo: soma binária de k/25 e jitter de
+    timestamp de até 20 ms não mudam o quadro da fusão. A 10 e a 3 fps, o
+    mesmo 0,98 dá 10 e 3 quadros: 1 s nas três taxas.
+
+    A fase anda um quadro a 25 fps: a contagem antiga começava em 1, e a
+    primeira fusão vinha no 25º quadro, 0,96 s depois do primeiro; agora
+    toda fusão, a primeira inclusive, espera 0,98 s e cai no 26º. O período
+    segue 25 quadros.
+    """
     history_window_s: float = 10.0
     contact_radius_m: float = 0.8
     proximity_radius_m: float = 2.0
@@ -275,6 +296,19 @@ SAFE_BOUNDS: dict[str, Bounds] = {
         "segundos depois de sumir da tela, e a janela de candidatos perde "
         "justamente quem estava em cima dela",
     ),
+    "pipeline.merge_every_s": Bounds(
+        0.0,
+        5.0,
+        "acima de 5s, quem andou junto só o mínimo (late_join_extent_m, 5 m, uns "
+        "4 s a passo de pedestre) tem essa caminhada saindo da janela de "
+        "histórico (history_window_s, 10 s) antes da fusão seguinte, e o "
+        "acompanhante que chegou com o dono fica sem vínculo forte: levar a mala "
+        "do grupo vira acusação (regra P1). É o defeito dos 25 quadros a 3 fps, "
+        "8,3 s. E afastamentos mais curtos que a cadência não zeram o cronômetro "
+        "do vínculo fraco, e quem saiu e voltou a sentar perto vira vínculo fraco "
+        "do grupo do dono sem ter ficado weak_bond_s seguidos. Zero é permitido: "
+        "funde a cada quadro, o que custa CPU e não segurança",
+    ),
     "reid.min_similarity": Bounds(
         0.70,
         0.999,
@@ -330,6 +364,15 @@ RETIRED_FIELDS: dict[str, str] = {
         "ajustado. Não há conversão automática porque a config não conhece o "
         "fps, e supor um reabriria o defeito em silêncio. O default novo, 0.18, "
         "decide no mesmo quinto quadro de antes a 25 fps"
+    ),
+    "pipeline.merge_every_frames": (
+        "contava quadros, e a mesma cena formava grupos e vínculos em durações "
+        "reais diferentes conforme o fps da fonte: 25 quadros eram 1 s a 25 fps "
+        "e 8,3 s a 3 fps. Use pipeline.merge_every_s, em segundos: N quadros "
+        "valem N / fps da fonte em que o valor foi ajustado. Não há conversão "
+        "automática porque a config não conhece o fps, e supor um reabriria o "
+        "defeito em silêncio. O default novo, 0.98, funde a cada 25 quadros a "
+        "25 fps, como antes"
     ),
 }
 """Campos removidos e o que pôr no lugar. Continuam recusados como qualquer

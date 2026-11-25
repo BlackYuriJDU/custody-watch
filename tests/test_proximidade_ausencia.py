@@ -56,7 +56,7 @@ def config_proximidade() -> Config:
     return Config(
         party=PartyConfig(weak_bond_s=600.0),
         pipeline=PipelineConfig(
-            merge_every_frames=1, proximity_flag_s=PROXIMIDADE_S, min_bag_height_px=SEM_PISO
+            merge_every_s=0.0, proximity_flag_s=PROXIMIDADE_S, min_bag_height_px=SEM_PISO
         ),
     )
 
@@ -65,7 +65,7 @@ def config_vinculo() -> Config:
     """Vínculo fraco em 10s, o piso da faixa segura."""
     return Config(
         party=PartyConfig(weak_bond_s=VINCULO_FRACO_S),
-        pipeline=PipelineConfig(merge_every_frames=1, min_bag_height_px=SEM_PISO),
+        pipeline=PipelineConfig(merge_every_s=0.0, min_bag_height_px=SEM_PISO),
     )
 
 

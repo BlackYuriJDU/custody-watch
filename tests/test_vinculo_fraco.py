@@ -31,7 +31,7 @@ PLANO = GroundPlane(np.eye(3))
 WEAK_BOND_S = 10.0
 CONFIG = Config(
     party=PartyConfig(weak_bond_s=WEAK_BOND_S),
-    pipeline=PipelineConfig(merge_every_frames=1, min_bag_height_px=0.0),
+    pipeline=PipelineConfig(merge_every_s=0.0, min_bag_height_px=0.0),
     custody=CustodyConfig(max_occlusion_s=5.0),
 )
 
@@ -85,7 +85,7 @@ def test_membro_fraco_que_permanece_junto_a_mala_do_grupo_recebe_n1():
     """A permanência prolongada continua contando depois do vínculo fraco."""
     config = Config(
         party=PartyConfig(weak_bond_s=WEAK_BOND_S),
-        pipeline=PipelineConfig(merge_every_frames=1, proximity_flag_s=30.0, min_bag_height_px=0.0),
+        pipeline=PipelineConfig(merge_every_s=0.0, proximity_flag_s=30.0, min_bag_height_px=0.0),
     )
     quadros = estranho_vira_membro_fraco(segundos=40)
 

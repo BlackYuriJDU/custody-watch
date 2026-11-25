@@ -24,9 +24,9 @@ from .types import Point
 
 MIN_FPS = 3.0
 """Menor taxa de quadros para a qual as premissas temporais valem. Prazos que
-dependem da cadência (fusão de grupos a cada `merge_every_frames` quadros,
-o piso de quadros e o quadro em que a oclusão vence) são dimensionados para
-ela, o pior caso."""
+dependem da amostragem (a fusão de grupos, que roda no primeiro quadro depois
+de vencer `merge_every_s`, o piso de quadros e o quadro em que a oclusão
+vence) são dimensionados para ela, o pior caso."""
 WALK_SPEED_MS = 1.2
 """Passo de pedestre; perto da mediana medida no CAVIAR (1,34 m/s, `tracking.py`)."""
 QUEUE_SPEED_MS = 0.5
@@ -138,6 +138,18 @@ def occlusion_declared_s(config: Config) -> float:
     return max(pelo_tempo, MIN_MISSING_FRAMES / MIN_FPS)
 
 
+def merge_interval_s(config: Config) -> float:
+    """Pior intervalo real entre duas fusões de grupos, a MIN_FPS.
+
+    A fusão roda no primeiro quadro a `merge_every_s` da anterior, então
+    nunca mais que um quadro depois de vencer: o intervalo é menor que
+    `merge_every_s` + 1 / fps, e o pior fps é MIN_FPS. Com o default, 0,98 +
+    0,33 = 1,31 s; a 3 fps o intervalo real é 1 s, e a folga cobre qualquer
+    fps acima de MIN_FPS.
+    """
+    return config.pipeline.merge_every_s + 1.0 / MIN_FPS
+
+
 @dataclass(frozen=True)
 class Timing:
     config: Config
@@ -149,7 +161,7 @@ class Timing:
 
     @property
     def merge_period_s(self) -> float:
-        return self.config.pipeline.merge_every_frames / MIN_FPS
+        return merge_interval_s(self.config)
 
     @property
     def weak_bond_wait_s(self) -> float:

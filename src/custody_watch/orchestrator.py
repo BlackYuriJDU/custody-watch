@@ -355,6 +355,25 @@ class _Session:
         self.previous_t = 0.0
         """Instante do quadro anterior. Ausência se mede até o último quadro
         em que a coisa faltou, então é ele que dá a duração de cada falta."""
+        self.last_merge_t = 0.0
+        """Instante da última fusão de grupos, ou do primeiro quadro enquanto
+        não houve nenhuma. É dele que `pipeline.merge_every_s` conta."""
+
+    def merge_due(self) -> bool:
+        """A fusão vence no primeiro quadro a `merge_every_s` da anterior.
+
+        Cadência em segundos, não em quadros: 25 quadros eram 1 s a 25 fps e
+        8,3 s a 3 fps, e a mesma cena formava o grupo -- e decidia quem é dono
+        -- em tempos reais diferentes conforme a fonte. Conta da fusão que de
+        fato rodou, então o intervalo real fica entre a cadência e a cadência
+        mais um quadro, em qualquer fps.
+        """
+        if self.frames == 1:
+            self.last_merge_t = self.t
+        if self.t - self.last_merge_t < self.config.pipeline.merge_every_s:
+            return False
+        self.last_merge_t = self.t
+        return True
 
     # --- percepção ------------------------------------------------------
 
@@ -1186,7 +1205,7 @@ class LiveSession:
 
         # Fundir é O(n²) sobre pares próximos, com is_comoving por dentro.
         # A cada frame seria desperdício: grupos não se formam em 40 ms.
-        if s.frames % pipeline.merge_every_frames == 0:
+        if s.merge_due():
             s.merge_parties(people)
 
         s.vetoes = anchor_vetoes(tracked, pipeline.min_bag_height_px)

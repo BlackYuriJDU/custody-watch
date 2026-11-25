@@ -9,8 +9,9 @@ from custody_watch.types import FlagLevel
 
 PLANO = GroundPlane(np.eye(3))
 
-# Nos testes o merge roda a cada frame: esperar 25 quadros só alongaria os
-# cenários sem exercitar nada. E `cena` faz um quadro valer um segundo, então
+# Nos testes o merge roda a cada frame (`merge_every_s` zero): esperar a
+# cadência só alongaria os cenários sem exercitar nada. E `cena` faz um quadro
+# valer um segundo, então
 # o timeout de oclusão desce para o mínimo da faixa segura — senão todo
 # cenário de retirada precisaria de mais de trinta quadros.
 #
@@ -19,7 +20,7 @@ PLANO = GroundPlane(np.eye(3))
 # cenários não têm. Ele tem teste próprio.
 SEM_PISO = 0.0
 RAPIDO = Config(
-    pipeline=PipelineConfig(merge_every_frames=1, min_bag_height_px=SEM_PISO),
+    pipeline=PipelineConfig(merge_every_s=0.0, min_bag_height_px=SEM_PISO),
     custody=CustodyConfig(max_occlusion_s=5.0),
 )
 
@@ -170,9 +171,7 @@ def test_dono_perto_da_propria_mala_nao_gera_flag():
 
 def test_permanencia_prolongada_gera_flag_n1():
     config = Config(
-        pipeline=PipelineConfig(
-            merge_every_frames=1, proximity_flag_s=3.0, min_bag_height_px=SEM_PISO
-        )
+        pipeline=PipelineConfig(merge_every_s=0.0, proximity_flag_s=3.0, min_bag_height_px=SEM_PISO)
     )
     quadros = [[pessoa(1, 0.0), mala(9, 0.3)]] * 2
     quadros += [[pessoa(1, 0.0), pessoa(7, 1.5), mala(9, 0.3)]] * 8
@@ -186,9 +185,7 @@ def test_permanencia_prolongada_gera_flag_n1():
 def test_n1_sozinho_nao_entra_na_fila():
     """N1 acumula contexto sem consumir tempo de operador."""
     config = Config(
-        pipeline=PipelineConfig(
-            merge_every_frames=1, proximity_flag_s=3.0, min_bag_height_px=SEM_PISO
-        )
+        pipeline=PipelineConfig(merge_every_s=0.0, proximity_flag_s=3.0, min_bag_height_px=SEM_PISO)
     )
     quadros = [[pessoa(1, 0.0), mala(9, 0.3)]] * 2
     quadros += [[pessoa(1, 0.0), pessoa(7, 1.5), mala(9, 0.3)]] * 8
@@ -202,9 +199,7 @@ def test_n1_sozinho_nao_entra_na_fila():
 def test_fila_ranqueia_quem_acumulou_mais_flags():
     """Com um flag por pessoa a fila nunca ordenou nada de verdade."""
     config = Config(
-        pipeline=PipelineConfig(
-            merge_every_frames=1, proximity_flag_s=2.0, min_bag_height_px=SEM_PISO
-        )
+        pipeline=PipelineConfig(merge_every_s=0.0, proximity_flag_s=2.0, min_bag_height_px=SEM_PISO)
     )
     quadros = [[pessoa(1, 0.0), mala(9, 0.3)]] * 2
     # 7 se aproxima e depois encosta; 8 so passa perto.
@@ -431,7 +426,7 @@ def test_piso_de_resolucao_veta_bagagem_pequena():
     no plano identidade -- é pequena demais para o detector ser confiável.
     É por isso que `RAPIDO` desliga o piso: ele não é o que se testa aqui."""
     quadros = [[pessoa(1, 0.5), mala(9, 0.0)] for _ in range(6)]
-    com_piso = Config(pipeline=PipelineConfig(merge_every_frames=1))
+    com_piso = Config(pipeline=PipelineConfig(merge_every_s=0.0))
 
     resultado = run_session(cena(*quadros), PLANO, com_piso)
 
