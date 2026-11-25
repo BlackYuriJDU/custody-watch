@@ -8,7 +8,6 @@ from .scenario_model import (
     ENTRY_DISTANCE_M,
     EXIT_DISTANCE_M,
     FOREVER,
-    MIN_FPS,
     OUTSIDE_AFTER_CROSSING_S,
     PREMISE_STEP_S,
     SLACK_S,
@@ -20,6 +19,7 @@ from .scenario_model import (
     arrive,
     crossing,
     entering,
+    merge_interval_s,
     origin_behind,
     person,
     suitcase,
@@ -67,7 +67,7 @@ def companion_takes(config: Config) -> Scenario:
         )
         extent = min(a.position(0.0).distance_to(a.position(t_dep)) for a in (o, c))
         late = cfg.party.late_join_extent_m
-        need = late / WALK_SPEED_MS + cfg.pipeline.merge_every_frames / MIN_FPS
+        need = late / WALK_SPEED_MS + merge_interval_s(cfg)
         return (
             depositor(scn, bag_id, owner_id, cfg),
             rests(scn, bag_id, t_dep, t_leave, cfg),

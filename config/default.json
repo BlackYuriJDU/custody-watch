@@ -41,7 +41,7 @@
   "pipeline": {
     "owner_search_radius_m": 3.0,
     "missing_before_occluded_s": 0.18,
-    "merge_every_frames": 25,
+    "merge_every_s": 0.98,
     "history_window_s": 10.0,
     "contact_radius_m": 0.8,
     "proximity_radius_m": 2.0,

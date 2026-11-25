@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from .config import Config
-from .scenario_model import MIN_FPS, PREMISE_STEP_S, Premissa, Scenario
+from .scenario_model import MIN_FPS, PREMISE_STEP_S, Premissa, Scenario, merge_interval_s
 from .scenario_motion import Actor, sample_times
 from .types import Point
 
@@ -75,7 +75,7 @@ def weak_bond(
     s, o, b = scn.actor(stranger), scn.actor(owner), scn.actor(bag)
     longest, _, _ = within_stats(s, o, config.party.proximity_m, t0, t1)
     _, _, closest_bag = within_stats(s, b, config.pipeline.contact_radius_m, t0, t1)
-    need = config.party.weak_bond_s + 2.0 * config.pipeline.merge_every_frames / MIN_FPS
+    need = config.party.weak_bond_s + 2.0 * merge_interval_s(config)
     owner_drift = max(o.position(t).distance_to(o.position(t0)) for t in _samples(t0, t1))
     return (
         Premissa(
