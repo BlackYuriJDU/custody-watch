@@ -178,6 +178,12 @@ class _Atendente(BaseHTTPRequestHandler):
         """Recusa e fecha a conexão antes de usar o corpo. O corpo pequeno é
         lido e descartado: no Windows, fechar com bytes não lidos no socket
         vira RST, e o cliente perde a resposta de recusa."""
+        self._descarta_corpo()
+        self._recusa(codigo, motivo)
+
+    def _descarta_corpo(self) -> None:
+        """Fecha a conexão depois desta resposta, lendo antes o corpo pequeno
+        que o pedido anunciou."""
         self.close_connection = True
         try:
             tamanho = int(self.headers.get("Content-Length") or 0)
@@ -185,7 +191,15 @@ class _Atendente(BaseHTTPRequestHandler):
                 self.rfile.read(tamanho)
         except (ValueError, OSError):  # OSError inclui o prazo de leitura
             pass
-        self._recusa(codigo, motivo)
+
+    def _metodo_sem_rota(self) -> None:
+        """Método que esta tela não atende. Sem isto, a classe base responde
+        501 e fecha sem ler o corpo, e o cliente no Windows perde a resposta."""
+        # A classe base registrava esta recusa no terminal; continua saindo.
+        self.log_error("code %d, message %s", 501, f"Unsupported method ({self.command!r})")
+        self._recusa_sem_ler(501, "método não suportado")
+
+    do_PUT = do_PATCH = do_DELETE = _metodo_sem_rota
 
     def do_GET(self) -> None:
         rota = urlsplit(self.path).path
@@ -219,6 +233,7 @@ class _Atendente(BaseHTTPRequestHandler):
         """
         rota = urlsplit(self.path).path
         if rota not in ("/ancora", "/dono"):
+            self._descarta_corpo()
             self._envia(404, "text/plain; charset=utf-8", "não existe".encode())
             return
         # JSON obriga o navegador a perguntar antes (preflight) em pedido de
