@@ -1,4 +1,5 @@
 import base64
+import re
 import subprocess
 import sys
 from dataclasses import replace
@@ -167,6 +168,15 @@ def test_body_pinta_o_proprio_fundo():
     html = render_report([sessao()])
 
     assert "background: var(--ground)" in html
+
+
+def test_pagina_nao_referencia_recursos_externos():
+    """A página exibe clipes de vigilância: abrir o HTML não pode chamar terceiros."""
+    html = render_report([sessao()])
+
+    assert not re.search(r"""(?:href|src)\s*=\s*["']?\s*(?:https?:)?//""", html, re.IGNORECASE)
+    assert "@import" not in html
+    assert not re.search(r"url\(\s*[\"']?\s*(?:https?:)?//", html, re.IGNORECASE)
 
 
 def test_write_report_cria_o_arquivo(tmp_path):
