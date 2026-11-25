@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {mapPosition} = require("../src/custody_watch/assets/map_positions.js");
+const {mapPosition, mapTheme} = require("../src/custody_watch/assets/map_positions.js");
 
 const unknown = {
   position_m: null,
@@ -33,6 +33,35 @@ test("sem referencial não existe ponto para desenhar", () => {
 test("resposta legada sem qualificação não vira localização aceita", () => {
   assert.equal(mapPosition({position_m: [1, 2]}, false), null);
   assert.equal(mapPosition({position_m: [1, 2]}, true), null);
+});
+
+test("cores da planta vêm das custom properties do tema", () => {
+  const lidos = [];
+  const tokens = {
+    "--mapa-grade": " #111 ", "--mapa-eixo": "#222", "--mapa-corpo": "#333", "--mapa-halo": "#444",
+    "--camera-0": "#a0", "--camera-1": "#a1", "--camera-2": "#a2", "--camera-3": "#a3",
+  };
+  const tema = mapTheme(nome => { lidos.push(nome); return tokens[nome]; });
+  assert.deepEqual(tema, {
+    grid: "#111", axis: "#222", body: "#333", halo: "#444", cameras: ["#a0", "#a1", "#a2", "#a3"],
+  });
+  assert.equal(lidos.length, 8);
+});
+
+test("token ausente cai em currentColor, nunca em literal", () => {
+  const tema = mapTheme(() => "");
+  assert.equal(tema.grid, "currentColor");
+  assert.deepEqual(tema.cameras, Array(4).fill("currentColor"));
+});
+
+test("trocar de tema muda a leitura na próxima chamada", () => {
+  let escuro = false;
+  const leitura = nome => (escuro ? "#escuro" : "#claro") + nome;
+  const antes = mapTheme(leitura);
+  escuro = true;
+  const depois = mapTheme(leitura);
+  assert.notEqual(antes.grid, depois.grid);
+  assert.notEqual(antes.cameras[0], depois.cameras[0]);
 });
 
 for (const point of [[NaN, 0], [0, Infinity], [true, 0], ["1", 0], [1], [1, 2, 3]]) {
