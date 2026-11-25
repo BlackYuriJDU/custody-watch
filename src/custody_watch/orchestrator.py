@@ -66,7 +66,7 @@ from .custody import resolve_removal, update_attendance
 from .events import Event, EventKind, EventLog
 from .flags import FlagStore, flag_contact, flag_for_removal, flag_proximity
 from .ground_plane import GroundPlane
-from .party import PartyManager, is_comoving
+from .party import TIME_EPSILON_S, PartyManager, is_comoving
 from .reid import TrackLinker
 from .terminal_bag_archive import TerminalBagArchive
 from .tracking import PlausibilityGate, TrackedDetection, anchor_vetoes, to_observations
@@ -344,6 +344,29 @@ class _Session:
             self.history[person.track_id] = [o for o in janela if o.t >= corte]
 
         return people
+
+    def esquece_proximidade_interrompida(self) -> None:
+        """Cronômetro de proximidade só conta tempo em que a pessoa foi vista.
+
+        Roda antes de `resolve_people` registrar o quadro atual, então o
+        último instante em `history` é o anterior a este. A tolerância é
+        `party.max_gap_s`, a lacuna que `is_comoving` já aceita como
+        observação contínua: abaixo dela é rajada de detector e o cronômetro
+        segue; acima, a chave sai. Sem isso, quem esteve perto, sumiu de
+        quadro e voltou recebia N1 ou vínculo fraco no ato, com o tempo fora
+        de quadro contado como permanência -- e as chaves de quem nunca
+        voltava ficavam para sempre.
+        """
+        tolerancia = self.config.party.max_gap_s + TIME_EPSILON_S
+
+        def sumiu(pessoa: int) -> bool:
+            janela = self.history.get(pessoa)
+            return not janela or self.t - janela[-1].t > tolerancia
+
+        for chave in [c for c in self.near_since if sumiu(c[0])]:
+            del self.near_since[chave]
+        for chave in [c for c in self.together_since if sumiu(c[0]) or sumiu(c[1])]:
+            del self.together_since[chave]
 
     # --- grupos ---------------------------------------------------------
 
@@ -964,6 +987,7 @@ class LiveSession:
         # como se fosse deslocamento real.
         observations = s.gate.filter(to_observations(tracked, self._plane, t))
         bags = [o for o in observations if o.cls in BAG_CLASSES]
+        s.esquece_proximidade_interrompida()
         people = s.resolve_people(observations, tracked)
 
         # Fundir é O(n²) sobre pares próximos, com is_comoving por dentro.
