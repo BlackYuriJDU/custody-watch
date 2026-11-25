@@ -23,6 +23,9 @@ from custody_watch.tracking import to_observations
 CONFIG = Config()
 CENARIOS = {s.name: s for s in build_scenarios(CONFIG)}
 TAXAS = (3.0, 10.0, 25.0)
+TAXAS_NAO_INTEIRAS = (3.25, 4.75)
+"""Taxas com `rest_confirm_s * fps` não inteiro, onde nenhuma mala virava
+âncora (`test_repouso_fps.py`): o benchmark caía de 11/11 para 7/11."""
 
 PASSAM_NA_MAIN = {
     "owner_returns": Verdict.CORRECT,
@@ -159,6 +162,12 @@ def test_todo_cenario_roda_no_sistema_e_recebe_veredito(nome):
 @pytest.mark.parametrize("fps", TAXAS)
 @pytest.mark.parametrize("nome", sorted(PASSAM_NA_MAIN))
 def test_desfecho_do_sistema_nos_cenarios_que_a_main_acerta(nome, fps):
+    assert veredito(nome, fps) is PASSAM_NA_MAIN[nome]
+
+
+@pytest.mark.parametrize("fps", TAXAS_NAO_INTEIRAS)
+@pytest.mark.parametrize("nome", sorted(PASSAM_NA_MAIN))
+def test_desfecho_nao_depende_de_a_taxa_ser_inteira(nome, fps):
     assert veredito(nome, fps) is PASSAM_NA_MAIN[nome]
 
 

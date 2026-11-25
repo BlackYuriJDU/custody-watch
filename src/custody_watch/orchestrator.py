@@ -179,6 +179,12 @@ def _centro(posicoes: list[Point]) -> Point:
     )
 
 
+def _cobre(decorrido: float, janela: float) -> bool:
+    """`decorrido` já alcança `janela`? Com a folga de `TIME_EPSILON_S`:
+    instantes vêm de `quadro / fps`, e 26/3 - 20/3 dá 1,9999999999999991."""
+    return decorrido >= janela - TIME_EPSILON_S
+
+
 def _nearest(people: Iterable[Observation], target) -> Observation | None:
     candidates = list(people)
     if not candidates:
@@ -220,6 +226,23 @@ class _Pendente:
         """
         return _centro([posicao for _, posicao in self.amostras])
 
+    def desliza(self, t: float, posicao: Point, janela: float) -> None:
+        """Acrescenta a amostra de `t` e descarta as que a janela não usa mais.
+
+        Fica a amostra mais nova que já está a `janela` de `t`, e todas as
+        depois dela: é ela que mostra que a janela foi coberta. Cortar em
+        `>= t - janela` só a mantinha quando caía exatamente no corte -- com
+        `janela * fps` inteiro, e se a subtração em ponto flutuante desse
+        exata. A 3,25 fps as amostras cobriam no máximo 6 / 3,25 = 1,85 s dos
+        2 s, `parada` nunca via a janela cheia e nenhuma bagagem virava âncora.
+        Assim a decisão sai no primeiro quadro em que o repouso vence a
+        janela, como as demais réguas em segundos.
+        """
+        self.amostras.append((t, posicao))
+        cobrem = [i for i, (ti, _) in enumerate(self.amostras) if _cobre(t - ti, janela)]
+        inicio = cobrem[-1] if cobrem else 0
+        self.amostras = self.amostras[inicio:]
+
     def parada(self, janela: float, limiar: float) -> bool:
         """As duas metades da janela concordam sobre onde a bagagem está?
 
@@ -242,7 +265,7 @@ class _Pendente:
         O corte efetivo é de velocidade: `v <= limiar/janela`, um quarto de
         metro por segundo com os defaults.
         """
-        if not self.amostras or self.amostras[-1][0] - self.amostras[0][0] < janela:
+        if not self.amostras or not _cobre(self.amostras[-1][0] - self.amostras[0][0], janela):
             return False
 
         meio = self.amostras[0][0] + janela / 2.0
@@ -820,9 +843,7 @@ class _Session:
         janela = self.config.custody.rest_confirm_s
         pendente = self.pending_bags.setdefault(observation.track_id, _Pendente(amostras=[]))
 
-        pendente.amostras.append((self.t, observation.position))
-        corte = self.t - janela
-        pendente.amostras = [(t, p) for t, p in pendente.amostras if t >= corte]
+        pendente.desliza(self.t, observation.position, janela)
         self._remember_depositor(pendente, people)
 
         if not pendente.parada(janela, self.config.registry.moved_threshold_m):
