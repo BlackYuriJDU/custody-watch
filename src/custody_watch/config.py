@@ -93,6 +93,7 @@ class ReidConfig:
     position_slack_m: float = 2.0
     min_samples: int = 10
     max_samples: int = 200
+    max_settle_s: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -285,6 +286,17 @@ SAFE_BOUNDS: dict[str, Bounds] = {
         10.0,
         "acima de 10 m/s qualquer reaparicao na cena e considerada plausivel, "
         "o que desliga a guarda fisica",
+    ),
+    "reid.max_settle_s": Bounds(
+        0.2,
+        1.0,
+        "acima de 1s, numa fonte de poucos quadros por segundo quem carrega a "
+        "bagagem fica fora de 'people' alem de carry_confirm_s (1s por padrao): "
+        "a bagagem parece andar sozinha, o furto vira bag_ambiguous e some da "
+        "fila; abaixo de 0.2s o prazo deixa de ser rede para fonte lenta e passa "
+        "a decidir tambem a 25 fps, encurtando o perfil para perto das cinco "
+        "amostras a partir das quais a margem foi medida estavel -- margem "
+        "ruidosa religa o ladrao ao grupo da vitima, e o furto fica mudo",
     ),
     "flags.tau_s": Bounds(
         60.0,
