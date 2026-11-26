@@ -142,7 +142,8 @@ def test_agregado_por_seed_registra_metodo_e_celulas(tmp_path):
     for r in linhas:
         if r["ruido"] == "sem_ruido":
             assert r["seeds"] == [None]
-            assert r["ic_inf"] is None and r["ic_sup"] is None
+            assert r["ic_inf"] is None
+            assert r["ic_sup"] is None
         else:
             assert r["seeds"] == [4, 5]
             assert 0.0 <= r["ic_inf"] <= r["media"] <= r["ic_sup"] <= 1.0

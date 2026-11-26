@@ -99,7 +99,8 @@ def test_sem_ruido_vira_uma_seed_sem_ic():
     assert len(linhas) == 1
     assert linhas[0]["seeds"] == [None]
     assert linhas[0]["media"] == 0.5
-    assert linhas[0]["ic_inf"] is None and linhas[0]["ic_sup"] is None
+    assert linhas[0]["ic_inf"] is None
+    assert linhas[0]["ic_sup"] is None
 
 
 def test_separa_fps_e_nivel_de_ruido():
@@ -115,8 +116,10 @@ def test_separa_fps_e_nivel_de_ruido():
 
 
 def test_mistura_de_execucao_sem_seed_com_seeds_e_recusada():
+    corridas = [_run(None, True), _run(0, True)]
+
     with pytest.raises(ValueError, match="mistura"):
-        aggregate_over_seeds([_run(None, True), _run(0, True)])
+        aggregate_over_seeds(corridas)
 
 
 def test_descricao_do_metodo_registra_limites():
