@@ -81,7 +81,7 @@ ALCANCE = (
 
 TAXAS_DE_FALHA = (0.0, 0.05, 0.10, 0.20, 0.40, 0.80)
 ERROS_DE_POSICAO_PX = (0.0, 1.0, 2.0, 4.0, 8.0)
-SEEDS_PADRAO = tuple(range(1, 9))
+SEEDS_PADRAO = (1, 2, 3, 4, 5, 6, 7, 8)
 SEED_MAXIMA = 1_000_000
 """Cada clipe usa `seed * 100 + índice`; o teto mantém isso longe de estouro."""
 RAJADA_QUADROS = 12

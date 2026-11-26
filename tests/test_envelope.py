@@ -38,7 +38,10 @@ def varre(clipes, seeds, varreduras=PEQUENA):
 
 
 def test_mesmas_seeds_mesmo_resultado(clipes):
-    assert varre(clipes, [3, 7]) == varre(clipes, [3, 7])
+    primeira = varre(clipes, [3, 7])
+    segunda = varre(clipes, [3, 7])
+
+    assert primeira == segunda
 
 
 def test_execucao_limpa_nao_depende_da_seed(clipes):
