@@ -266,7 +266,7 @@ def load_cursor(path: Path | str, session_id: str) -> JournalCursor:
         numbers = [data["part"], data["offset"], data["next_sequence"]]
         if any(type(n) is not int or n < 0 for n in numbers) or data["part"] > 999999:
             raise ValueError("posição do cursor")
-    except (OSError, ValueError, UnicodeError) as error:
+    except (OSError, ValueError) as error:
         raise WebhookConfigError(f"cursor recusado: {type(error).__name__}") from None
     return JournalCursor(session_id, *numbers)
 
@@ -320,11 +320,25 @@ def _parse(line: bytes | None, cursor: JournalCursor) -> dict[str, Any] | None:
             line.decode("utf-8"), object_pairs_hook=_unique_object, parse_constant=_reject_constant
         )
         validate_record(record)
-    except (ValueError, TypeError, UnicodeError, RecursionError):
+    except (ValueError, TypeError, RecursionError):
         return None
     if record["session_id"] != cursor.session_id or record["sequence"] < cursor.next_sequence:
         return None
     return record
+
+
+def _iter_part(
+    path: Path, part: int, offset: int, rotated: bool, cursor: JournalCursor, max_line_bytes: int
+) -> Iterator[tuple[dict[str, Any] | None, int, int]]:
+    """Linhas de uma parte a partir de `offset`; para no fragmento sem LF se ela é a última."""
+    with path.open("rb") as handle:
+        handle.seek(offset)
+        while True:
+            line, consumed, terminated = _read_line(handle, max_line_bytes)
+            if consumed == 0 or not (terminated or rotated):
+                return
+            offset += consumed
+            yield (_parse(line, cursor) if terminated else None), part, offset
 
 
 def iter_confirmed(
@@ -342,16 +356,7 @@ def iter_confirmed(
         if not path.is_file():
             return
         rotated = (directory / f"{part + 1:06d}.jsonl").is_file()
-        with path.open("rb") as handle:
-            handle.seek(offset)
-            while True:
-                line, consumed, terminated = _read_line(handle, max_line_bytes)
-                if consumed == 0:
-                    break
-                if not terminated and not rotated:
-                    return
-                offset += consumed
-                yield (_parse(line, cursor) if terminated else None), part, offset
+        yield from _iter_part(path, part, offset, rotated, cursor, max_line_bytes)
         if not rotated:
             return
         part, offset = part + 1, 0
@@ -477,33 +482,37 @@ class WebhookExporter:
         if record is not None:
             self.cursor.next_sequence = record["sequence"] + 1
 
+    def _export_event(self, record: dict[str, Any]) -> bool:
+        """Entrega um evento e conta o desfecho; False se a passada deve parar."""
+        outcome = self.deliver(build_payload(record))
+        if outcome == "stalled":
+            self.stats.stalled += 1
+            return False
+        if outcome == "discarded":
+            self.stats.discarded += 1
+        else:
+            self.stats.sent += 1
+        return True
+
     def run_once(self) -> str:
         """Drena o que está confirmado: 'caught_up' ou 'stalled'."""
         dirty = False
         lines = iter_confirmed(self.session_dir, self.cursor, self.config.max_line_bytes)
         try:
             for record, part, offset in lines:
+                is_event = record is not None and record["kind"] == "event"
+                if is_event and not self._export_event(record):
+                    if dirty:
+                        save_cursor(self.cursor_path, self.cursor)
+                    return "stalled"
                 if record is None:
                     self.stats.invalid_records += 1
-                elif record["kind"] != "event":
+                elif not is_event:
                     self.stats.skipped_records += 1
-                else:
-                    outcome = self.deliver(build_payload(record))
-                    if outcome == "stalled":
-                        self.stats.stalled += 1
-                        if dirty:
-                            save_cursor(self.cursor_path, self.cursor)
-                        return "stalled"
-                    if outcome == "discarded":
-                        self.stats.discarded += 1
-                    else:
-                        self.stats.sent += 1
-                    self._advance(part, offset, record)
-                    save_cursor(self.cursor_path, self.cursor)
-                    dirty = False
-                    continue
                 self._advance(part, offset, record)
-                dirty = True
+                dirty = not is_event
+                if is_event:
+                    save_cursor(self.cursor_path, self.cursor)
         finally:
             lines.close()
             self.stats.backlog_bytes = self._backlog_bytes()
